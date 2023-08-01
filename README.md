@@ -26,7 +26,7 @@ Habu has been tested on macOS and Linux (Windows is not yet supported).
   - To add a weekly habit, use `habu add <name> weekly <days per week>`
     - The last number sets how many days per week the habit must be performed to be considered unbroken
 
-After adding the chain, the main
+After adding a chain, all your chains are displayed on a calender-like grid. This grid can be viewed with either `habu display` or just `habu` without arguments. The number before the chain name is the _chain index_, which is used in most commands to refer to a specific chain.
 
 ```
                                                                            8
@@ -36,9 +36,8 @@ After adding the chain, the main
   ^--- this is the chain index
 ```
 
-2. View your progress with either `habu display` or just `habu` without arguments. The number before the chain name is the _chain index_, which is used in most commands to refer to a specific chain.
 
-3. To mark today's exercise as completed, use `habu link 1`:
+2. To mark today's exercise as completed, use `habu link 1`:
 
 ```
                                                                            8
