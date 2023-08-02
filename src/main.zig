@@ -1002,31 +1002,29 @@ pub fn main() !void {
             try link_db.materialize(chain_db.meta.len);
             var links = link_db.getAndSortLinks(null);
 
-            var jw = std.json.writeStream(sow, 20);
-            jw.whitespace = .{};
+            var jw = std.json.writeStreamMaxDepth(sow, .{ .whitespace = .indent_4 }, 8);
 
             try jw.beginArray();
             for (chains) |chain| {
-                try jw.arrayElem();
                 try jw.beginObject();
 
                 try jw.objectField("id");
-                try jw.emitNumber(chain.id);
+                try jw.write(chain.id);
 
                 try jw.objectField("name");
-                try jw.emitString(chain.name[0..chain.name_len]);
+                try jw.write(chain.name[0..chain.name_len]);
 
                 try jw.objectField("created");
-                try jw.emitNumber(chain.created);
+                try jw.write(chain.created);
 
                 try jw.objectField("kind");
-                try jw.emitString(@tagName(chain.kind));
+                try jw.write(@tagName(chain.kind));
 
                 try jw.objectField("color");
-                try jw.emitString(&chain.color.toHex());
+                try jw.write(&chain.color.toHex());
 
                 try jw.objectField("min_days");
-                try jw.emitNumber(chain.min_days);
+                try jw.write(chain.min_days);
 
                 if (chain.n_tags > 0) {
                     try jw.objectField("tags");
@@ -1034,12 +1032,11 @@ pub fn main() !void {
                     var i: usize = 0;
                     while (i < chain.n_tags) : (i += 1) {
                         const tag = chain.tags[i];
-                        try jw.arrayElem();
                         try jw.beginObject();
                         try jw.objectField("id");
-                        try jw.emitNumber(tag.header.id);
+                        try jw.write(tag.header.id);
                         try jw.objectField("name");
-                        try jw.emitString(tag.getName());
+                        try jw.write(tag.getName());
                         try jw.endObject();
                     }
                     try jw.endArray();
@@ -1054,10 +1051,9 @@ pub fn main() !void {
                         const link = links[i];
                         if (link.chain_id != chain.id)
                             break;
-                        try jw.arrayElem();
                         try jw.beginObject();
                         try jw.objectField("timestamp");
-                        try jw.emitNumber(link.timestamp);
+                        try jw.write(link.timestamp);
                         try jw.endObject();
                     }
                     try jw.endArray();
