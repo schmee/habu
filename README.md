@@ -10,9 +10,9 @@ It's inspired by the "Don't break the chain" method (attributed to Jerry Seinfel
 
 ## Building
 
-Habu has been tested on macOS and Linux (Windows is not yet supported).
+Habu is primarily tested on macOS, but Linux is also supported (there is no Windows support yet).
 
-1. Download the latest Zig `master` build from https://ziglang.org/download/.
+1. Download Zig 0.11.0 for your platform from https://ziglang.org/download/.
 1. Clone this repo.
 1. Run `zig build install -Drelease`.
 1. Place `zig-out/bin/habu` somewhere on your path.
