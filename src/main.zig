@@ -858,43 +858,6 @@ fn parseOptions(allocator: Allocator, args: [][]const u8, options: *Options) ![]
     return args_array.toOwnedSlice();
 }
 
-pub fn main2() !void {
-    var c_allocator = std.heap.c_allocator;
-    var arena = std.heap.ArenaAllocator.init(c_allocator);
-    var allocator = arena.allocator();
-    defer arena.deinit();
-
-    const start = try std.time.Instant.now();
-    defer {
-        const end = std.time.Instant.now() catch unreachable;
-        std.log.debug("finished in {}", .{std.fmt.fmtDuration(end.since(start))});
-    }
-    try date.initTimetype(allocator);
-
-    var options: Options = .{};
-    var files = try openOrCreateDbFiles(options.data_dir, "");
-    defer files.close();
-    var chain_db = ChainDb{ .allocator = allocator, .file = files.chains };
-
-    const new_names: [4][]const u8 = .{
-        "Drink coffee",
-        "Exercise",
-        "Floss",
-        "Procrastinate",
-    };
-
-    try chain_db.materialize();
-
-    chain_db.chains.items.len = 4;
-    for (chain_db.chains.items, new_names) |*chain, new_name| {
-        std.mem.copy(u8, &chain.name, new_name);
-        chain.name_len = @intCast(new_name.len);
-    }
-    chain_db.meta.len = 4;
-
-    try chain_db.persist();
-}
-
 pub fn main() !void {
     var c_allocator = std.heap.c_allocator;
     var arena = std.heap.ArenaAllocator.init(c_allocator);
