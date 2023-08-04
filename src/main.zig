@@ -331,6 +331,7 @@ const LinkDb = struct {
         if (result.occupied) {
             var w = std.io.getStdOut().writer();
             try w.print("Link already exists on date {s}, skipping\n", .{link.toLocalDate().asString()});
+            return;
         }
 
         self.meta.len += 1;
@@ -355,7 +356,7 @@ const LinkDb = struct {
 
     fn persist(self: *Self) !void {
         std.debug.assert(self.materialized);
-        self.verify();
+        try self.verify();
 
         if (self.first_write_index == NO_WRITE) return;
         var w = self.file.writer();
@@ -398,8 +399,8 @@ const LinkDb = struct {
             null;
     }
 
-    fn verify(self: *Self) void {
-        if (builtin.mode != .Debug) return;
+    fn verify(self: *Self) !void {
+        if (builtin.mode == .ReleaseFast or builtin.mode == .ReleaseSmall) return;
 
         std.debug.assert(self.materialized);
         const ChainIdAndDate = struct {
@@ -408,15 +409,22 @@ const LinkDb = struct {
         };
         var seen = std.AutoHashMap(ChainIdAndDate, void).init(self.allocator);
         defer seen.deinit();
+        var n_links: usize = 0;
         for (self.links.items, 0..) |link, i| {
             const chain_id_and_date = .{
                 .chain_id = link.chain_id,
                 .timestamp = link.localAtStartOfDay()
             };
             if (seen.contains(chain_id_and_date)) {
-                std.log.info("LINK FILE INCONSISTENT! Duplicate link i {d} {}", .{i, chain_id_and_date});
+                std.log.info("LINK DB INCONSISTENT! Duplicate link i {d} {}", .{i, chain_id_and_date});
                 panic();
             }
+            try seen.put(chain_id_and_date, {});
+            n_links += 1;
+        }
+        if (n_links != self.meta.len) {
+            std.log.info("LINK DB INCONSISTENT! meta len and actual link count differ, meta len {d}, actual len {d}", .{self.meta.len, n_links});
+            panic();
         }
     }
 };
