@@ -119,12 +119,10 @@ fn drawChain(comptime kind: main.Kind, w: anytype, ctx: *DrawContext, chain: *co
     }
 
     var i: usize = 0;
-    const maybe_items = while (i < links.len) : (i += 1) {
+    const items = while (i < links.len) : (i += 1) {
         if (links[i].toLocalDate().compare(ctx.start) != .lt)
             break links[i..];
-    } else null;
-    if (maybe_items == null) return;
-    const items = maybe_items.?;
+    } else return;
 
     const week_info: struct { link_count: [date.max_weeks_per_year + 1]u8, index: usize } = if (kind == .weekly) blk: {
         const start_of_week = ctx.start.atStartOfWeek();

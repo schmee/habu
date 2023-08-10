@@ -30,7 +30,7 @@ fn lowerBound(
 }
 
 fn panic() noreturn {
-    @panic("fatal error, aborting");
+    @panic("fatal error");
 }
 
 pub const Kind = enum(u8) {
@@ -285,10 +285,9 @@ const LinkDb = struct {
 
     fn getLinksForChain(self: *Self, chain_id: u16, local_date: ?LocalDate) []Link {
         var links = self.getAndSortLinks(local_date);
-        const chain_start = LinkDb.chainStartIndex(links, chain_id);
-        if (chain_start == null) return &.{};
-        const chain_end = LinkDb.chainEndIndex(links, chain_id);
-        return links[chain_start.? .. chain_end.?];
+        const chain_start = LinkDb.chainStartIndex(links, chain_id) orelse return &.{};
+        const chain_end = LinkDb.chainEndIndex(links, chain_id).?; // if there's a start there's an end
+        return links[chain_start .. chain_end];
     }
 
     fn getInsertIndex(links: []Link, chain_id: u16, timestamp: i64) struct { index: usize, occupied: bool } {
@@ -786,19 +785,15 @@ fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
         };
         break :blk .{ .dir = data_dir, .path = ddp };
     } else blk: {
-        var home_dir_path = std.os.getenv("HOME");
-        if (home_dir_path == null) {
-            printAndExit("Could not find 'HOME' directory, aborting\n", .{});
-        }
-
-        var home_dir = try std.fs.openDirAbsolute(home_dir_path.?, .{});
+        const home_dir_path = std.os.getenv("HOME") orelse printAndExit("Could not find 'HOME' directory\n", .{});
+        var home_dir = try std.fs.openDirAbsolute(home_dir_path, .{});
         defer home_dir.close();
 
         const data_path = ".habu";
         var habu_dir = home_dir.openDir(data_path, .{}) catch |err| switch (err) {
             error.FileNotFound => dir: {
                 const dir = try home_dir.makeOpenPath(data_path, .{});
-                try sow.print("Created data dir at {s}/{s} (to remove habu, delete this directory)\n", .{home_dir_path.?, data_path});
+                try sow.print("Created data dir at {s}/{s} (to remove habu, delete this directory)\n", .{home_dir_path, data_path});
                 break :dir dir;
             },
             else => return err,
@@ -1146,17 +1141,13 @@ pub fn main() !void {
             const sub_command = if (optionalArg(args, 2)) |str|
                 parseCommandOrExit(str)
             else
-                null;
-
-            if (sub_command) |c| {
-                const help_str = help.commandHelp(c);
-                if (help_str) |str| {
-                    try sow.writeAll(str);
-                } else {
-                    printAndExit("No additional help avaiable for subcommand '{s}'\n", .{@tagName(c)});
-                }
-            } else {
                 printHelpAndExit(null);
+
+            const help_str = help.commandHelp(sub_command);
+            if (help_str) |str| {
+                try sow.writeAll(str);
+            } else {
+                printAndExit("No additional help avaiable for subcommand '{s}'\n", .{@tagName(sub_command)});
             }
         },
         .modify => {

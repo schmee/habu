@@ -234,19 +234,17 @@ pub fn epochNow() i64 {
 }
 
 pub fn initTimetype(allocator: Allocator) !void {
-    const timezones: ?std.Tz = getUserTimeZoneDb(allocator) catch |err| switch (err) {
-        error.FileNotFound => null, // Assume UTC
+    defer tz_init = true;
+    const db = getUserTimeZoneDb(allocator) catch |err| switch (err) {
+        error.FileNotFound => return, // Assume UTC
         else => return err,
     };
-    if (timezones) |tz| {
-        for (tz.transitions, 0..) |t, i| {
-            if (t.ts > instant_20220101) {
-                transitions = tz.transitions[i - 1 ..];
-                break;
-            }
+    for (db.transitions, 0..) |t, i| {
+        if (t.ts > instant_20220101) {
+            transitions = db.transitions[i - 1 ..];
+            break;
         }
     }
-    tz_init = true;
 }
 
 // `initTimetype` MUST be called before any of these functions are used!
@@ -267,12 +265,10 @@ fn utcOffset(instant: i64) i64 {
 }
 
 pub inline fn utcToLocal(instant: i64) i64 {
-    std.debug.assert(tz_init);
     return instant + utcOffset(instant);
 }
 
 pub inline fn localToUtc(instant: i64) i64 {
-    std.debug.assert(tz_init);
     return instant - utcOffset(instant);
 }
 
@@ -281,7 +277,6 @@ pub fn localAtStartOfDay(instant: i64) i64 {
 }
 
 pub fn epochNowLocal() i64 {
-    std.debug.assert(tz_init);
     return utcToLocal(epochNow());
 }
 
