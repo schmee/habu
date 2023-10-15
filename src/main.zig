@@ -618,6 +618,17 @@ fn parseCommandOrExit(str: []const u8) Command {
     };
 }
 
+fn checkNumberOfArgs(allocator: Allocator, args: []const []const u8, max: usize) !void {
+    if (args.len == 0) return;
+
+    // The first element of `args` is the command which doesn't count
+    const len = args.len - 1;
+    if (len > max) {
+        const extra_args = try std.mem.join(allocator, ", ", args[max + 1..]);
+        printAndExit("Expected at most {} arguments, got {}, extra: [{s}]\n", .{max, len, extra_args});
+    }
+}
+
 fn optionalArg(args: []const []const u8, index: usize) ?[]const u8 {
     return if (args.len > index) args[index] else null;
 }
@@ -838,7 +849,7 @@ const Options = struct {
     data_dir: ?[]const u8 = null,
 };
 
-fn parseOptions(allocator: Allocator, args: [][]const u8, options: *Options) ![][]const u8 {
+fn parseOptionsAndPrepareArgs(allocator: Allocator, args: [][]const u8, options: *Options) ![][]const u8 {
     var args_array = std.ArrayList([]const u8).fromOwnedSlice(allocator, args);
     var i: usize = 0;
     while (i < args_array.items.len) : (i += 1) {
@@ -850,6 +861,8 @@ fn parseOptions(allocator: Allocator, args: [][]const u8, options: *Options) ![]
             break;
         }
     }
+    // Remove path to binary from args to make args zero-indexed.
+    _ = args_array.orderedRemove(0);
     return args_array.toOwnedSlice();
 }
 
@@ -873,24 +886,25 @@ pub fn main() !void {
 
     var args: [][]const u8 = try std.process.argsAlloc(allocator);
     var options: Options = .{};
-    args = try parseOptions(allocator, args, &options);
+    args = try parseOptionsAndPrepareArgs(allocator, args, &options);
 
     var files = try openOrCreateDbFiles(options.data_dir, "");
     defer files.close();
     var chain_db = ChainDb{ .allocator = allocator, .file = files.chains };
     var link_db = LinkDb{ .allocator = allocator, .file = files.links };
 
-    const command = if (optionalArg(args, 1)) |command_str|
+    const command = if (optionalArg(args, 0)) |command_str|
         parseCommandOrExit(command_str)
     else
         .display;
 
     switch (command) {
         .add => {
-            const name = expectArg(args, 2, "name");
+            try checkNumberOfArgs(allocator, args, 3);
+            const name = expectArg(args, 1, "name");
             validateNameLen(name);
 
-            const kind_str = expectArg(args, 3, "kind");
+            const kind_str = expectArg(args, 2, "kind");
             const kind = std.meta.stringToEnum(Kind, kind_str) orelse {
                 const msg = scratchPrint("Invalid kind '{s}', expected one of: ", .{trunc(kind_str)});
                 try sow.writeAll(msg);
@@ -901,12 +915,13 @@ pub fn main() !void {
                         try sow.writeAll(", ");
                 }
                 try sow.writeAll("\n");
+                try buffered_writer.flush();
                 std.process.exit(0);
             };
 
             const min_days = blk: {
                 if (kind == .weekly) {
-                    const min_days_str = expectArg(args, 4, "min_days");
+                    const min_days_str = expectArg(args, 3, "min_days");
                     break :blk parseMinDaysOrExit(min_days_str);
                 } else {
                     break :blk 0;
@@ -938,14 +953,15 @@ pub fn main() !void {
             try tui.drawChains(chains, links, range.start, range.end);
         },
         .info => {
+            try checkNumberOfArgs(allocator, args, 2);
             try chain_db.materialize();
-            const index_str = expectArg(args, 2, "index");
+            const index_str = expectArg(args, 1, "index");
             const cid_and_index = try parseAndValidateChainIndex(&chain_db, index_str);
             var chain = chain_db.getByIndex(cid_and_index.index);
 
             try link_db.materialize(chain_db.meta.len);
 
-            const date_arg = optionalArg(args, 3);
+            const date_arg = optionalArg(args, 2);
             // Show link info
             if (date_arg) |str| {
                 const link_date = parseLocalDateOrExit(str, "link");
@@ -962,6 +978,7 @@ pub fn main() !void {
             }
         },
         .@"export" => {
+            try checkNumberOfArgs(allocator, args, 0);
             _ = try chain_db.materialize();
             const chains = chain_db.getChains();
 
@@ -1031,6 +1048,7 @@ pub fn main() !void {
             try sow.writeByte('\n');
         },
         .import => {
+            try checkNumberOfArgs(allocator, args, 0);
             var r = std.io.getStdIn().reader();
             const bytes = try r.readAllAlloc(allocator, 200_000);
             var root = (try std.json.parseFromSliceLeaky(std.json.Value, allocator, bytes, .{}));
@@ -1124,13 +1142,14 @@ pub fn main() !void {
             try imported_files.links.setEndPos(@sizeOf(LinkMeta) + link_bytes.len);
         },
         .display => {
+            try checkNumberOfArgs(allocator, args, 2);
             try chain_db.materialize();
             if (chain_db.meta.len == 0) {
                 printAndExit("No chains to display, use `habu add` to add a chain or `habu help` for a full list of commands.\n", .{});
             }
             const chains = chain_db.getChains();
 
-            const range = parseRangeOrExit(optionalArg(args, 2), optionalArg(args, 3));
+            const range = parseRangeOrExit(optionalArg(args, 1), optionalArg(args, 2));
 
             try link_db.materialize(chain_db.meta.len);
             const links = link_db.getAndSortLinks(range.start);
@@ -1138,7 +1157,8 @@ pub fn main() !void {
             try tui.drawChains(chains, links, range.start, range.end);
         },
         .help => {
-            const sub_command = if (optionalArg(args, 2)) |str|
+            try checkNumberOfArgs(allocator, args, 0);
+            const sub_command = if (optionalArg(args, 1)) |str|
                 parseCommandOrExit(str)
             else
                 printHelpAndExit(null);
@@ -1151,12 +1171,13 @@ pub fn main() !void {
             }
         },
         .modify => {
+            try checkNumberOfArgs(allocator, args, 3);
             try chain_db.materialize();
-            const index_str = expectArg(args, 2, "id");
+            const index_str = expectArg(args, 1, "id");
             const cid_and_index = try parseAndValidateChainIndex(&chain_db, index_str);
 
-            const field = expectArg(args, 3, "field");
-            const value = expectArg(args, 4, "value");
+            const field = expectArg(args, 2, "field");
+            const value = expectArg(args, 3, "value");
             var chain = chain_db.getByIndex(cid_and_index.index);
 
             if (std.mem.eql(u8, field, "color")) {
@@ -1180,7 +1201,7 @@ pub fn main() !void {
                         printAndExit("Max tags ({d}) exceeded\n", .{max_tags});
                     }
 
-                    const name = expectArg(args, 5, "name");
+                    const name = expectArg(args, 4, "name");
                     validateTagNameLen(name);
                     var name_buf = std.mem.zeroes([tag_name_max_len]u8);
                     std.mem.copy(u8, &name_buf, name[0..@min(name.len, name_buf.len)]);
@@ -1205,8 +1226,9 @@ pub fn main() !void {
             try chain_db.persist();
         },
         .delete => {
+            try checkNumberOfArgs(allocator, args, 1);
             try chain_db.materialize();
-            const index_str = expectArg(args, 2, "index");
+            const index_str = expectArg(args, 1, "index");
             const cid_and_index = try parseAndValidateChainIndex(&chain_db, index_str);
 
             chain_db.delete(cid_and_index.index);
@@ -1222,26 +1244,26 @@ pub fn main() !void {
             try chain_db.materialize();
             try link_db.materialize(chain_db.meta.len);
 
-            const index_str = expectArg(args, 2, "index");
+            const index_str = expectArg(args, 1, "index");
             const cids_and_indexes = try parseChainIndexes(allocator, &chain_db, index_str);
 
-            const start_date_str = optionalArg(args, 3);
+            const start_date_str = optionalArg(args, 2);
             const timestamp = if (start_date_str) |start_date|
                 parseLocalDateOrExit(start_date, "link").midnightInLocal()
             else
                 date.epochNow();
 
-            const tags_str = optionalArg(args, 4);
-
             for (cids_and_indexes) |cid_and_index| {
                 switch (command) {
                     .link => {
+                        try checkNumberOfArgs(allocator, args, 3);
                         var link = Link{
                             .chain_id = cid_and_index.id,
                             .tags = 0,
                             .timestamp = timestamp,
                         };
 
+                        const tags_str = optionalArg(args, 3);
                         if (tags_str) |str| {
                             const chain = chain_db.getByIndex(cid_and_index.index);
                             var it = std.mem.split(u8, str, ",");
@@ -1251,6 +1273,7 @@ pub fn main() !void {
                         try link_db.add(link);
                     },
                     .unlink => {
+                        try checkNumberOfArgs(allocator, args, 2);
                         const removed = link_db.remove(cid_and_index.id, timestamp);
                         if (!removed) {
                             const date_str = start_date_str orelse &LocalDate.fromEpoch(timestamp).asString();
@@ -1271,11 +1294,12 @@ pub fn main() !void {
             try tui.drawChains(chains, links, range.start, range.end);
         },
         .tag => {
-            const index_str = expectArg(args, 2, "index");
+            try checkNumberOfArgs(allocator, args, 3);
+            const index_str = expectArg(args, 1, "index");
             try chain_db.materialize();
             const cid_and_index = try parseAndValidateChainIndex(&chain_db, index_str);
 
-            const date_str = expectArg(args, 3, "date");
+            const date_str = expectArg(args, 2, "date");
             const link_date = parseLocalDateOrExit(date_str, "link").toEpoch();
 
             try link_db.materialize(chain_db.meta.len);
@@ -1292,7 +1316,7 @@ pub fn main() !void {
                 printAndExit("Chain '{d}' has no tags\n", .{chain.id});
             }
 
-            const tag_names = expectArg(args, 4, "tags");
+            const tag_names = expectArg(args, 3, "tags");
             var it = std.mem.split(u8, tag_names, ",");
             link.tags = chain.tagsFromNames(&it);
 
