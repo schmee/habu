@@ -906,17 +906,12 @@ pub fn main() !void {
 
             const kind_str = expectArg(args, 2, "kind");
             const kind = std.meta.stringToEnum(Kind, kind_str) orelse {
-                const msg = scratchPrint("Invalid kind '{s}', expected one of: ", .{trunc(kind_str)});
-                try sow.writeAll(msg);
-                const values = std.enums.values(Kind);
-                for (values, 0..) |k, i| {
-                    try sow.writeAll(@tagName(k));
-                    if (i < values.len - 1)
-                        try sow.writeAll(", ");
+                var kind_strs: [@typeInfo(Kind).Enum.fields.len][]const u8 = undefined;
+                inline for (comptime std.enums.values(Kind), 0..) |k, i| {
+                    kind_strs[i] = @tagName(k);
                 }
-                try sow.writeAll("\n");
-                try buffered_writer.flush();
-                std.process.exit(0);
+                const values = try std.mem.join(allocator, ", ", &kind_strs);
+                printAndExit("Invalid kind '{s}', expected one of: [{s}]\n", .{trunc(kind_str), values});
             };
 
             const min_days = blk: {
