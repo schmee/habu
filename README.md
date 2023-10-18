@@ -8,6 +8,10 @@ It's inspired by the "Don't break the chain" method (attributed to Jerry Seinfel
   <img src="screenshot.png">
 </p>
 
+## Installation
+
+Grab the latest build from the [releases](https://github.com/schmee/habu/releases/), or [build it yourself](#building)!
+
 ## Building
 
 Habu is primarily tested on macOS, but Linux is also supported (there is no Windows support yet).
