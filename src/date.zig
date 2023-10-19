@@ -1,5 +1,7 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const epoch = std.time.epoch;
+const windows = std.os.windows;
 
 const Allocator = std.mem.Allocator;
 
@@ -16,11 +18,12 @@ const Weekday = enum(u3) {
     sun,
 };
 
+const start_year: i64 = 2022;
 const weekday_20220101: Weekday = .sat;
 const instant_20220101: i64 = 1640995200;
 
 var tz_init: bool = false;
-var transitions: ?[]const std.tz.Transition = null;
+var transitions: ?[]const Transition = null;
 
 pub fn getWeekdayFromEpoch(instant: i64) Weekday {
     std.debug.assert(instant > instant_20220101);
@@ -233,18 +236,113 @@ pub fn epochNow() i64 {
     return std.time.timestamp();
 }
 
+pub const Transition = struct {
+    ts: i64,
+    offset: i32,
+};
+
 pub fn initTimetype(allocator: Allocator) !void {
+    switch (builtin.os.tag) {
+        .windows => try initTimetypeWindows(allocator),
+        else => try initTimetypePosix(allocator),
+    }
+}
+
+pub fn initTimetypePosix(allocator: Allocator) !void {
     defer tz_init = true;
-    const db = getUserTimeZoneDb(allocator) catch |err| switch (err) {
+    var db = getUserTimeZoneDb(allocator) catch |err| switch (err) {
         error.FileNotFound => return, // Assume UTC
         else => return err,
     };
-    for (db.transitions, 0..) |t, i| {
-        if (t.ts > instant_20220101) {
-            transitions = db.transitions[i - 1 ..];
-            break;
-        }
+    defer db.deinit();
+    var transitions_array = std.ArrayList(Transition).init(allocator);
+    for (db.transitions) |t| {
+        if (t.ts < instant_20220101) continue;
+        try transitions_array.append(.{
+            .ts = t.ts,
+            .offset = t.timetype.offset,
+        });
     }
+    transitions = try transitions_array.toOwnedSlice();
+}
+
+pub fn initTimetypeWindows(allocator: Allocator) !void {
+    defer tz_init = true;
+
+    var tz: TIME_DYNAMIC_ZONE_INFORMATION = undefined;
+    const result = GetDynamicTimeZoneInformation(&tz);
+    if (result == TIME_ZONE_ID_INVALID ) {
+        return error.InvalidTimezone;
+    }
+
+    var local_time: SYSTEMTIME = undefined;
+    GetLocalTime(&local_time);
+
+    var year: u16 = @intCast(start_year);
+    const end_year = local_time.year + 1;
+    var transitions_array = std.ArrayList(Transition).init(allocator);
+    while (year <= end_year) : (year += 1) {
+        try transitions_array.append(transitionFromTz("standard", tz, year));
+        try transitions_array.append(transitionFromTz("daylight", tz, year));
+    }
+
+    const S = struct {
+        fn order(_: void, a: Transition, b: Transition) bool {
+            return a.ts < b.ts;
+        }
+    };
+    std.sort.pdq(Transition, transitions_array.items, {}, S.order);
+    transitions = try transitions_array.toOwnedSlice();
+}
+
+const TIME_ZONE_ID_INVALID: windows.DWORD = 0xffffffff;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-systemtime
+const SYSTEMTIME = extern struct {
+    year: windows.WORD,
+    month: windows.WORD,
+    day_of_week: windows.WORD,
+    day: windows.WORD,
+    hour: windows.WORD,
+    minute: windows.WORD,
+    second: windows.WORD,
+    milliseconds: windows.WORD,
+};
+
+// https://learn.microsoft.com/en-us/windows/win32/api/timezoneapi/ns-timezoneapi-dynamic_time_zone_information
+const TIME_DYNAMIC_ZONE_INFORMATION = extern struct {
+    bias: windows.LONG,
+    standard_name: [32]windows.WCHAR,
+    standard_date: SYSTEMTIME,
+    standard_bias: windows.LONG,
+    daylight_name: [32]windows.WCHAR,
+    daylight_date: SYSTEMTIME,
+    daylight_bias: windows.LONG,
+    timezone_key_name: [128]windows.WCHAR,
+    dynamic_daylight_time_disabled: bool,
+};
+
+pub extern "kernel32" fn GetLocalTime(ptr: *SYSTEMTIME) callconv(windows.WINAPI) void;
+pub extern "kernel32" fn GetDynamicTimeZoneInformation(ptr: *TIME_DYNAMIC_ZONE_INFORMATION) callconv(windows.WINAPI) windows.DWORD;
+
+fn transitionFromTz(comptime prefix: []const u8, tz: TIME_DYNAMIC_ZONE_INFORMATION, year: u16) Transition {
+    const the_date = @field(tz, prefix ++ "_date");
+    const first_half: LocalDate = .{
+        .year = year,
+        .month = @intCast(the_date.month),
+        .day = @intCast(the_date.day),
+        .local = true,
+    };
+    const ts = first_half.toEpoch() +
+        (the_date.hour) * 60 * 60 +
+        the_date.minute * 60 +
+        the_date.second;
+    const bias = @field(tz, prefix ++ "_bias");
+    const offset = -(tz.bias - bias) * 60;
+    return .{
+        .ts = ts - offset,
+        .offset = offset,
+    };
 }
 
 // `initTimetype` MUST be called before any of these functions are used!
@@ -255,7 +353,7 @@ pub fn utcOffset(instant: i64) i64 {
     if (transitions) |trans| {
         for (trans, 0..) |t, i| {
             if (t.ts > instant) {
-                return trans[i - 1].timetype.offset;
+                return trans[i - 1].offset;
             }
         }
     } else {

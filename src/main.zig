@@ -6,6 +6,8 @@ const date = @import("date.zig");
 const help = @import("help.zig");
 const tui = @import("tui.zig");
 
+const windows = std.os.windows;
+
 const Allocator = std.mem.Allocator;
 const LocalDate = date.LocalDate;
 
@@ -834,6 +836,29 @@ const Files = struct {
     }
 };
 
+fn getConfigDirPath() ![]const u8 {
+    switch (builtin.os.tag) {
+        .windows => {
+            const app_data_local = std.os.windows.GUID.parse("{F1B32785-6FBA-4FCF-9D55-7B8E7F157091}");
+            var dir_path_ptr: [*:0]u16 = undefined;
+            const hresult = std.os.windows.shell32.SHGetKnownFolderPath(
+                &app_data_local,
+                std.os.windows.KF_FLAG_CREATE,
+                null,
+                &dir_path_ptr,
+            );
+            switch (hresult) {
+                std.os.windows.S_OK => {
+                    defer std.os.windows.ole32.CoTaskMemFree(@ptrCast(dir_path_ptr));
+                    return std.unicode.utf16leToUtf8Alloc(std.heap.c_allocator, std.mem.span(dir_path_ptr));
+                },
+                else => printAndExit("Could not open AppData/Local directory\n", .{}),
+            }
+        },
+        else => return std.os.getenv("HOME") orelse printAndExit("Could not find 'HOME' directory\n", .{}),
+    }
+}
+
 fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
     var sow = std.io.getStdOut().writer();
 
@@ -846,23 +871,26 @@ fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
         };
         break :blk .{ .dir = data_dir, .path = ddp };
     } else blk: {
-        const home_dir_path = std.os.getenv("HOME") orelse printAndExit("Could not find 'HOME' directory\n", .{});
-        var home_dir = try std.fs.openDirAbsolute(home_dir_path, .{});
-        defer home_dir.close();
+        const config_dir_path = try getConfigDirPath();
+        var config_dir = try std.fs.openDirAbsolute(config_dir_path, .{});
+        defer config_dir.close();
 
-        const data_path = ".habu";
-        var habu_dir = home_dir.openDir(data_path, .{}) catch |err| switch (err) {
+        const habu_dir_path = switch (builtin.os.tag) {
+            .windows => "habu",
+            else => ".habu",
+        };
+        var habu_dir = config_dir.openDir(habu_dir_path, .{}) catch |err| switch (err) {
             error.FileNotFound => dir: {
-                const dir = try home_dir.makeOpenPath(data_path, .{});
-                try sow.print("Created data dir at {s}/{s} (to remove habu, delete this directory)\n", .{home_dir_path, data_path});
+                const dir = try config_dir.makeOpenPath(habu_dir_path, .{});
+                try sow.print("Created data dir at {s}/{s} (to remove habu, delete this directory)\n", .{config_dir_path, habu_dir_path});
                 break :dir dir;
             },
             else => return err,
         };
-        break :blk .{ .dir = habu_dir, .path = data_path };
+        break :blk .{ .dir = habu_dir, .path = habu_dir_path };
     };
     var habu_dir = habu.dir;
-    const data_path = habu.path;
+    const habu_dir_path = habu.path;
     defer habu_dir.close();
 
     const chains_filename = scratchPrint("chains.bin{s}", .{suffix});
@@ -873,7 +901,7 @@ fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
             const meta = ChainMeta{ .id_counter = 0, .len = 0 };
             var w = chains.writer();
             try w.writeStruct(meta);
-            std.log.debug("Wrote {s} to {s}", .{chains_filename, data_path});
+            std.log.debug("Wrote {s} to {s}", .{chains_filename, habu_dir_path});
         }
     }
 
@@ -885,7 +913,7 @@ fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
             const meta = LinkMeta{ .len = 0 };
             var w = links.writer();
             try w.writeStruct(meta);
-            std.log.debug("Wrote {s} to {s}", .{links_filename, data_path});
+            std.log.debug("Wrote {s} to {s}", .{links_filename, habu_dir_path});
         }
     }
 
@@ -934,6 +962,10 @@ fn parseOptionsAndPrepareArgs(allocator: Allocator, args: [][]const u8, options:
 }
 
 pub fn main() !void {
+    const old_code_page = if (builtin.os.tag == .windows) std.os.windows.kernel32.GetConsoleOutputCP() else undefined;
+    if (builtin.os.tag == .windows)
+        _ = std.os.windows.kernel32.SetConsoleOutputCP(65001);
+
     var c_allocator = std.heap.c_allocator;
     var arena = std.heap.ArenaAllocator.init(c_allocator);
     var allocator = arena.allocator();
@@ -1412,4 +1444,7 @@ pub fn main() !void {
             }
         }
     }
+
+    if (builtin.os.tag == .windows)
+        _ = std.os.windows.kernel32.SetConsoleOutputCP(old_code_page);
 }

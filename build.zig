@@ -57,4 +57,5 @@ const triples = .{
     "x86_64-linux-gnu",
     "aarch64-macos-none",
     "x86_64-macos-none",
+    "x86_64-windows-gnu",
 };
