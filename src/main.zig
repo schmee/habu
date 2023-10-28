@@ -968,7 +968,7 @@ pub fn main() !void {
                 try tui.drawLinkDetails(chain, chain_links, result.index);
             } else { // Show chain info
                 const range = parseRangeOrExit(null, null);
-                const chain_links = link_db.getLinksForChain(cid_and_index.id, range.start);
+                const chain_links = link_db.getLinksForChain(cid_and_index.id, null);
                 try tui.drawChainDetails(chain, chain_links, range.start, range.end);
             }
         },
