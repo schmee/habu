@@ -929,7 +929,7 @@ pub fn main() !void {
 
             var chain = Chain{
                 .id = chain_db.meta.id_counter,
-                .name = undefined,
+                .name = std.mem.zeroes([128]u8),
                 .name_len = @as(u16, @intCast(name.len)),
                 .kind = kind,
                 .color = color.colors[chain_db.meta.len % color.colors.len],
