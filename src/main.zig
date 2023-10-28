@@ -790,6 +790,8 @@ fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
     var sow = std.io.getStdOut().writer();
 
     var habu: struct { dir: std.fs.Dir, path: []const u8} = if (data_dir_path) |ddp| blk: {
+        if (!std.fs.path.isAbsolute(ddp))
+            printAndExit("Expected absolute path, got '{s}'\n", .{ddp});
         var data_dir = std.fs.openDirAbsolute(ddp, .{}) catch |err| switch (err) {
             error.FileNotFound => printAndExit("Could not open data dir at '{s}'\n", .{ddp}),
             else => return err,
