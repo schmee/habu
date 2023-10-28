@@ -1152,7 +1152,7 @@ pub fn main() !void {
             try tui.drawChains(chains, links, range.start, range.end);
         },
         .help => {
-            try checkNumberOfArgs(allocator, args, 0);
+            try checkNumberOfArgs(allocator, args, 1);
             const sub_command = if (optionalArg(args, 1)) |str|
                 parseCommandOrExit(str)
             else
