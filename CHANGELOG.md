@@ -3,6 +3,12 @@
 Features:
 
 - Add `habu version` command.
+- Add `stopped` modifier to chains.
+
+Stopping a chain is useful when you are no longer interested in tracking it but you want to keep the history and stats around.
+Use `modify <index> stopped <date>` to stop a chain, or `modify <index> stopped false` to make a stopped chain active.
+Stopped chains are not displayed by default, and their stats only include the dates from the creation date up to the stopped date.
+Also add a new `--show` parameter to choose which chains to display.
 
 Bugfixes:
 

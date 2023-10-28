@@ -60,6 +60,7 @@ pub const Tag = extern struct {
     }
 };
 
+pub const ACTIVE: i64 = 0;
 pub const chain_name_max_len = 128;
 pub const max_tags = 4;
 pub const Chain = extern struct {
@@ -72,9 +73,14 @@ pub const Chain = extern struct {
     min_days: u8, // `0` means N/A
     n_tags: u8,
     tags: [max_tags]Tag,
-    _padding: [46]u8 = std.mem.zeroes([46]u8),
+    stopped: i64,
+    _padding: [30]u8 = std.mem.zeroes([30]u8),
 
     const Self = @This();
+
+    pub fn isActive(self: *const Self) bool {
+        return self.stopped == ACTIVE;
+    }
 
     pub fn getTags(self: *const Self) []const Tag {
         return self.tags[0..self.n_tags];
@@ -117,15 +123,15 @@ pub const Chain = extern struct {
                     break;
                 }
             } else {
-                var buf = std.mem.zeroes([max_tags * tag_name_max_len]u8);
+                var buf = std.mem.zeroes([max_tags * tag_name_max_len + 8]u8); // +8 for ", "
                 var fba = std.io.fixedBufferStream(&buf);
                 var w = fba.writer();
                 for (tags, 0..) |tag, i| {
                     w.writeAll(tag.getName()) catch unreachable;
                     if (i < tags.len - 1)
-                        w.writeAll(",") catch unreachable;
+                        w.writeAll(", ") catch unreachable;
                 }
-                printAndExit("Chain '{d}' has no tag '{s}', available tags: {s}\n", .{ self.id, name, fba.getWritten() });
+                printAndExit("Chain '{d}' has no tag '{s}', available tags: [{s}]\n", .{ self.id, name, fba.getWritten() });
             }
         }
         return link_tags;
@@ -140,8 +146,10 @@ comptime {
 const ChainDb = struct {
     allocator: Allocator,
     file: std.fs.File,
+    show: Show,
     meta: ChainMeta = undefined,
     chains: std.ArrayList(Chain) = undefined,
+    filtered_chains: std.ArrayList(*Chain) = undefined,
     materialized: bool = false,
 
     const Self = @This();
@@ -150,13 +158,30 @@ const ChainDb = struct {
         std.debug.assert(!self.materialized);
         try self.file.seekTo(0);
         var r = self.file.reader();
-        const bytes = try r.readAllAlloc(self.allocator, 200_000);
+        const stat = try self.file.stat();
+        // Pre-allocate space for one additional chain
+        var bytes = try self.allocator.alloc(u8, stat.size + @sizeOf(Chain));
+        _ = try r.readAll(bytes);
 
         self.meta = @bitCast(bytes[0..@sizeOf(ChainMeta)].*);
         const chain_bytes: [*]Chain = @ptrCast(@alignCast(bytes[@sizeOf(ChainMeta)..]));
         self.chains = std.ArrayList(Chain).fromOwnedSlice(self.allocator, chain_bytes[0..self.meta.len]);
+        self.chains.capacity = self.meta.len + 1;
+        self.filtered_chains = try std.ArrayList(*Chain).initCapacity(self.allocator, self.meta.len + 1);
+        self.refilter();
 
         self.materialized = true;
+    }
+
+    fn refilter(self: *Self) void {
+        self.filtered_chains.clearRetainingCapacity();
+        for (self.chains.items) |*chain| {
+            const include = (self.show == .all) or
+                (self.show == .stopped and !chain.isActive()) or
+                (self.show == .active and chain.isActive());
+            if (include)
+                self.filtered_chains.appendAssumeCapacity(chain);
+        }
     }
 
     fn persist(self: *Self) !void {
@@ -171,31 +196,39 @@ const ChainDb = struct {
 
     fn getByIndex(self: *Self, index: u16) *Chain {
         std.debug.assert(self.materialized);
-        return &self.chains.items[index - 1];
+        return self.filtered_chains.items[index - 1];
     }
 
     fn indexToId(self: *const Self, index: usize)?u16 {
         std.debug.assert(self.materialized);
-        if (index == 0 or index > self.chains.items.len) return null;
-        return self.chains.items[index - 1].id;
+        if (index == 0 or index > self.filtered_chains.items.len) return null;
+        return self.filtered_chains.items[index - 1].id;
     }
 
-    fn getChains(self: Self) []Chain {
+    fn getChains(self: Self) []*Chain {
         std.debug.assert(self.materialized);
-        return self.chains.items;
+        return self.filtered_chains.items;
     }
 
     fn add(self: *Self, chain: *Chain) !void {
         std.debug.assert(self.materialized);
         self.meta.len += 1;
         self.meta.id_counter += 1;
-        try self.chains.append(chain.*);
+        self.chains.appendAssumeCapacity(chain.*);
+        self.filtered_chains.appendAssumeCapacity(&self.chains.items[self.chains.items.len - 1]);
     }
 
     fn delete(self: *Self, index: u16) void {
         std.debug.assert(self.materialized);
-        _ = self.chains.orderedRemove(index - 1);
+        const removed = self.filtered_chains.orderedRemove(index - 1);
+        for (self.chains.items, 0..) |*chain, i| {
+            if (chain.id == removed.id) {
+                _ = self.chains.orderedRemove(i);
+                break;
+            }
+        } else unreachable;
         self.meta.len -= 1;
+        self.refilter();
     }
 };
 
@@ -483,15 +516,18 @@ pub fn computeStats(chain: *const Chain, links: []const Link) Stats {
             }
 
             const first_link_start = links[0].localAtStartOfDay();
-            const now_start = date.epochAtStartOfDay(date.epochNowLocal());
+            const end = if (chain.isActive())
+                date.epochAtStartOfDay(date.epochNowLocal())
+            else
+                chain.stopped;
             // +2 because we include both the start date and the end date in the count
-            const n_days = date.daysBetween(first_link_start, now_start) + 2;
+            const n_days = date.daysBetween(first_link_start, end) + 2;
             const percentage = @as(f32, @floatFromInt(links.len)) / @as(f32, @floatFromInt(n_days)) * 100;
             var fulfillment = std.mem.zeroes([32]u8);
             _ = std.fmt.bufPrint(&fulfillment, "{d}/{d} ({d:.2}%)", .{ links.len, n_days, percentage }) catch unreachable;
 
             const last_link_at_start_of_day = links[links.len - 1].localAtStartOfDay();
-            const days = date.daysBetween(last_link_at_start_of_day, now_start);
+            const days = date.daysBetween(last_link_at_start_of_day, end);
             if (days > max_gap)
                 max_gap = days + 1; // +1 since there is no link on `now`
             if (days > 0)
@@ -586,6 +622,16 @@ fn trunc(str: []const u8) []const u8 {
 
 pub fn scratchPrint(comptime str: []const u8, args: anytype) []const u8 {
     return std.fmt.bufPrint(&scratch, str, args) catch panic();
+}
+
+
+fn formatEnumValuesForPrint(comptime E: type, allocator: Allocator) ![]const u8 {
+    var strs: [@typeInfo(E).Enum.fields.len][]const u8 = undefined;
+    inline for (comptime std.enums.values(E), 0..) |e, i| {
+        strs[i] = @tagName(e);
+    }
+    const values = try std.mem.join(allocator, ", ", &strs);
+    return scratchPrint("[{s}]", .{values});
 }
 
 // TODO: can the error message by generated lazily somehow?
@@ -849,21 +895,38 @@ fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
     };
 }
 
+const Show = enum {
+    all,
+    stopped,
+    active,
+};
+
 const Options = struct {
     data_dir: ?[]const u8 = null,
+    show: Show = .active,
 };
 
 fn parseOptionsAndPrepareArgs(allocator: Allocator, args: [][]const u8, options: *Options) ![][]const u8 {
     var args_array = std.ArrayList([]const u8).fromOwnedSlice(allocator, args);
     var i: usize = 0;
-    while (i < args_array.items.len) : (i += 1) {
-        const arg = args[i];
+    while (i < args_array.items.len) {
+        var hit = false;
+        const arg = args_array.items[i];
         if (std.mem.eql(u8, arg, "--data-dir")) {
+            if (i == args_array.items.len - 1) printAndExit("Missing path argument to --data-dir\n", .{});
             _ = args_array.orderedRemove(i);
-            if (i == args.len - 1) break;
             options.data_dir = args_array.orderedRemove(i);
-            break;
+            hit = true;
+        } else if (std.mem.eql(u8, arg, "--show")) {
+            if (i == args_array.items.len - 1) printAndExit("Missing argument to --show, expected one of {s}\n", .{try formatEnumValuesForPrint(Show, allocator)});
+            _ = args_array.orderedRemove(i);
+            const show_str = args_array.orderedRemove(i);
+            options.show = std.meta.stringToEnum(Show, show_str) orelse
+                printAndExit("Invalid argument to --show, expected one of {s}, got {s}\n", .{try formatEnumValuesForPrint(Show, allocator), show_str});
+            hit = true;
         }
+        if (!hit)
+            i += 1;
     }
     // Remove path to binary from args to make args zero-indexed.
     _ = args_array.orderedRemove(0);
@@ -894,7 +957,7 @@ pub fn main() !void {
 
     var files = try openOrCreateDbFiles(options.data_dir, "");
     defer files.close();
-    var chain_db = ChainDb{ .allocator = allocator, .file = files.chains };
+    var chain_db = ChainDb{ .allocator = allocator, .file = files.chains, .show = options.show };
     var link_db = LinkDb{ .allocator = allocator, .file = files.links };
 
     const command = if (optionalArg(args, 0)) |command_str|
@@ -909,14 +972,8 @@ pub fn main() !void {
             validateNameLen(name);
 
             const kind_str = expectArg(args, 2, "kind");
-            const kind = std.meta.stringToEnum(Kind, kind_str) orelse {
-                var kind_strs: [@typeInfo(Kind).Enum.fields.len][]const u8 = undefined;
-                inline for (comptime std.enums.values(Kind), 0..) |k, i| {
-                    kind_strs[i] = @tagName(k);
-                }
-                const values = try std.mem.join(allocator, ", ", &kind_strs);
-                printAndExit("Invalid kind '{s}', expected one of: [{s}]\n", .{trunc(kind_str), values});
-            };
+            const kind = std.meta.stringToEnum(Kind, kind_str) orelse
+                printAndExit("Invalid kind '{s}', expected one of {s}\n", .{trunc(kind_str), try formatEnumValuesForPrint(Kind, allocator)});
 
             const min_days = blk: {
                 if (kind == .weekly) {
@@ -937,6 +994,7 @@ pub fn main() !void {
                 .color = color.colors[chain_db.meta.len % color.colors.len],
                 .min_days = min_days,
                 .created = date.epochNow(),
+                .stopped = ACTIVE,
                 .n_tags = 0,
                 .tags = std.mem.zeroes([max_tags]Tag),
             };
@@ -950,6 +1008,7 @@ pub fn main() !void {
             const range = parseRangeOrExit(null, null);
             const links = link_db.getAndSortLinks(range.start);
             try tui.drawChains(chains, links, range.start, range.end);
+
         },
         .info => {
             try checkNumberOfArgs(allocator, args, 2);
@@ -971,14 +1030,19 @@ pub fn main() !void {
 
                 try tui.drawLinkDetails(chain, chain_links, result.index);
             } else { // Show chain info
-                const range = parseRangeOrExit(null, null);
+                const range = if (chain.isActive())
+                    parseRangeOrExit(null, null)
+                else Range{
+                    .start = LocalDate.fromEpoch(chain.stopped - 30 * date.secs_per_day),
+                    .end = LocalDate.fromEpoch(chain.stopped),
+                };
                 const chain_links = link_db.getLinksForChain(cid_and_index.id, null);
                 try tui.drawChainDetails(chain, chain_links, range.start, range.end);
             }
         },
         .@"export" => {
             try checkNumberOfArgs(allocator, args, 0);
-            _ = try chain_db.materialize();
+            try chain_db.materialize();
             const chains = chain_db.getChains();
 
             try link_db.materialize(chain_db.meta.len);
@@ -998,6 +1062,9 @@ pub fn main() !void {
 
                 try jw.objectField("created");
                 try jw.write(chain.created);
+
+                try jw.objectField("stopped");
+                try jw.write(chain.stopped);
 
                 try jw.objectField("kind");
                 try jw.write(@tagName(chain.kind));
@@ -1090,6 +1157,7 @@ pub fn main() !void {
                 const chain = Chain{
                     .name = name_buf,
                     .created = @as(i64, @intCast(chain_object.get("created").?.integer)),
+                    .stopped = @as(i64, @intCast(chain_object.get("stopped").?.integer)),
                     .color = try color.Rgb.fromHex(chain_object.get("color").?.string[1..]),
                     .id = @as(u16, @intCast(chain_object.get("id").?.integer)),
                     .name_len = @as(u16, @intCast(name.len)),
@@ -1217,12 +1285,24 @@ pub fn main() !void {
                 } else if (std.mem.eql(u8, op, "rename")) {
                     printAndExit("TODO: implement tag rename\n", .{});
                 }
+            } else if (std.mem.eql(u8, field, "stopped")) {
+                chain.stopped = if (std.mem.eql(u8, value, "false"))
+                    ACTIVE
+                else
+                    parseLocalDateOrExit(value, "stop").toEpoch();
+                chain_db.refilter();
             } else {
                 const msg = scratchPrint("Invalid field '{s}', expected one of: color, name, min_days\n", .{trunc(field)});
                 try printHelpAndExit(msg);
             }
 
             try chain_db.persist();
+
+            try link_db.materialize(chain_db.meta.len);
+            const chains = chain_db.getChains();
+            const range = parseRangeOrExit(null, null);
+            const links = link_db.getAndSortLinks(range.start);
+            try tui.drawChains(chains, links, range.start, range.end);
         },
         .delete => {
             try checkNumberOfArgs(allocator, args, 1);

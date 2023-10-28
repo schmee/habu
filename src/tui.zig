@@ -104,7 +104,7 @@ pub fn drawHeader(w: anytype, ctx: *const DrawContext) !void {
 }
 
 fn formatPrelude(index: usize, chain: *const main.Chain) []const u8 {
-    return main.scratchPrint("({d}) {s}", .{ index + 1, chain.name[0..chain.name_len] });
+    return main.scratchPrint("({d}{s}) {s}", .{ index + 1, if (chain.isActive()) "" else "/s", chain.name[0..chain.name_len] });
 }
 
 fn drawChain(comptime kind: main.Kind, w: anytype, ctx: *DrawContext, chain: *const main.Chain, links: []const main.Link, index: usize) !void {
@@ -229,7 +229,7 @@ const DrawContext = struct {
     max_prelude_len: usize,
 };
 
-pub fn drawChains(chains: []const main.Chain, links: []const main.Link, start: LocalDate, end: LocalDate) !void {
+pub fn drawChains(chains: []const *main.Chain, links: []const main.Link, start: LocalDate, end: LocalDate) !void {
     var sow = std.io.getStdOut().writer();
     var buffered_writer = std.io.bufferedWriter(sow);
     var w = buffered_writer.writer();
@@ -239,7 +239,7 @@ pub fn drawChains(chains: []const main.Chain, links: []const main.Link, start: L
         .end = end,
         .max_prelude_len = blk: {
             var max_prelude_len: usize = 0;
-            for (chains, 0..) |*chain, i| {
+            for (chains, 0..) |chain, i| {
                 // TODO: don't format this twice (once here and once on print)
                 max_prelude_len = @max(max_prelude_len, formatPrelude(i, chain).len);
             }
@@ -253,7 +253,7 @@ pub fn drawChains(chains: []const main.Chain, links: []const main.Link, start: L
     verticalSpace(w, 1);
 
     // TODO: better way of doing this
-    for (chains, 0..) |*chain, i| {
+    for (chains, 0..) |chain, i| {
         var link_index: usize = 0;
         while (link_index < links.len and links[link_index].chain_id != chain.id) : (link_index += 1) {}
         const link_start = link_index;
@@ -302,14 +302,15 @@ pub fn drawChainDetails(chain: *const main.Chain, links: []const main.Link, star
     writeText(w, "  Color:", main.scratchPrint("{s}", .{chain.color.toHex()}));
     writeText(w, "  Kind:", main.scratchPrint("{s}", .{@tagName(chain.kind)}));
     writeText(w, "  Created:", main.scratchPrint("{s}", .{LocalDate.fromEpoch(chain.created).asString()}));
+    writeText(w, "  Stopped:", main.scratchPrint("{s}", .{if (chain.isActive()) "false" else &LocalDate.fromEpoch(chain.stopped).asString()}));
     writeText(w, "  Fulfillment:", main.scratchPrint("{s}", .{std.mem.sliceTo(&stats.fulfillment, 0)}));
     writeText(w, "  Longest streak:", main.scratchPrint("{d}", .{stats.longest_streak}));
     writeText(w, "  Times broken:", main.scratchPrint("{d}", .{stats.times_broken}));
     writeText(w, "  Longest gap:", main.scratchPrint("{d}", .{stats.longest_gap}));
     verticalSpace(w, 1);
 
-    const first_timestamp = if (links.len > 0) &LocalDate.fromEpoch(links[0].timestamp).asString() else "N/A";
-    const last_timestamp = if (links.len > 0) &LocalDate.fromEpoch(links[links.len - 1].timestamp).asString() else "N/A";
+    const first_timestamp = if (links.len > 0) &LocalDate.fromEpoch(links[0].local()).asString() else "N/A";
+    const last_timestamp = if (links.len > 0) &LocalDate.fromEpoch(links[links.len - 1].local()).asString() else "N/A";
     writeText(w, "Links", "");
     writeText(w, "  Number of links:", main.scratchPrint("{d}", .{links.len}));
     writeText(w, "  First timestamp:", main.scratchPrint("{s}", .{first_timestamp}));

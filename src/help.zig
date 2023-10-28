@@ -18,6 +18,7 @@ pub const help_str =
 \\
 \\Options:
 \\       --data-dir: absolute path to override where to read/write data files.
+\\       --show (all|active|stopped): which chains to include, see `modify` command for details on the `stopped` option
 \\
 \\Chain:
 \\       A habit you want to track. The name comes from the "Don't break the chain" method of building
@@ -98,6 +99,7 @@ pub fn commandHelp(command: Command) ?[]const u8 {
                       \\   - name (max length 128)
                       \\   - type (daily/weekly)
                       \\   - min_days (1-7)
+                      \\   - stopped (<date> | false)
                       \\
                       \\ Examples:
                       \\
@@ -109,6 +111,9 @@ pub fn commandHelp(command: Command) ?[]const u8 {
                       \\
                       \\ Change the min_days of chain 3 to 5
                       \\ `habu modify 3 min_days 5`
+                      \\
+                      \\ Change the visibility of the chain (stopped chains are hidden by default)
+                      \\ `habu modify 1 stopped 20231101`
                       \\
                     ,
         .link     => \\ Marks a chain as completed on the specified date.
