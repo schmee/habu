@@ -1,4 +1,5 @@
 const std = @import("std");
+const build_options = @import("build_options");
 const builtin = @import("builtin");
 const color = @import("color.zig");
 const date = @import("date.zig");
@@ -565,6 +566,7 @@ pub const Command = enum {
     modify,
     tag,
     unlink,
+    version,
 };
 
 var scratch = std.mem.zeroes([256]u8);
@@ -1319,5 +1321,9 @@ pub fn main() !void {
 
             try link_db.persist();
         },
+        .version => {
+            try sow.print("version: {s}\n", .{build_options.version});
+            try sow.print("commit hash: {s}\n", .{build_options.git_commit_hash});
+        }
     }
 }

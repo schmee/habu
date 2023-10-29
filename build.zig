@@ -16,6 +16,15 @@ pub fn build(b: *std.Build) !void {
 
     b.installArtifact(exe);
 
+    const build_opts = b.addOptions();
+    exe.addOptions("build_options", build_opts);
+
+    const version = "unstable";
+    build_opts.addOption([]const u8, "version", version);
+
+    const git_commit_hash = b.exec(&.{"git", "rev-parse", "HEAD"});
+    build_opts.addOption([]const u8, "git_commit_hash", git_commit_hash[0..git_commit_hash.len - 1]); // Skip ending newline
+
     const cross_step = b.step("cross", "Install cross-compiled executables");
 
     inline for (triples) |triple| {
