@@ -1,5 +1,9 @@
 ### Unreleased
 
+Features:
+
+- Add `habu version` command.
+
 Bugfixes:
 
 - Compute stats for the entire chain in `info` command, not just the last 30 days.
