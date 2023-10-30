@@ -14,6 +14,7 @@ pub const help_str =
 \\       habu modify <index> <field> <value> [<field> <value>...]
 \\       habu tag <index> <date> <tag>
 \\       habu unlink <range> [<date>]
+\\       habu version
 \\
 \\Options:
 \\       --data-dir: absolute path to override where to read/write data files.
