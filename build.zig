@@ -35,6 +35,7 @@ pub fn build(b: *std.Build) !void {
             .target = try std.zig.CrossTarget.parse(.{ .arch_os_abi = triple }),
             .link_libc = true,
         });
+        cross.addOptions("build_options", build_opts);
         cross.strip = true;
         const cross_install = b.addInstallArtifact(cross, .{});
         cross_step.dependOn(&cross_install.step);
