@@ -21,6 +21,12 @@ Habu is primarily tested on macOS, but Linux is also supported (there is no Wind
 1. Run `zig build install -Drelease`.
 1. Place `zig-out/bin/habu` somewhere on your path.
 
+## Note on stability
+
+Although Habu is stable enough for daily use, it should still be considered experimental. It is recommended to regularly back up your `.habu` directory, especially before upgrading to a new version.
+
+The versioning philosophy is to avoid breaking changes whenever possible, for both the data format and the CLI, but there might be cases where breaking changes are necessary. If they do occur, they will be always be pointed out explicitly in the CHANGELOG and include instructions on how to upgrade.
+
 ## Getting started
 
  Let's walk through how to track a daily habit:
