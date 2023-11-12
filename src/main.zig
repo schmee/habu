@@ -1404,6 +1404,12 @@ pub fn main() !void {
         .version => {
             try sow.print("version: {s}\n", .{build_options.version});
             try sow.print("commit hash: {s}\n", .{build_options.git_commit_hash});
+            if (optionalArg(args, 1)) |verbose| {
+                if (std.mem.eql(u8, verbose, "-v")) {
+                    const offset_ns = date.utcOffset(date.epochNowLocal()) * std.time.ns_per_s;
+                    try sow.print("UTC offset: {}\n", .{std.fmt.fmtDurationSigned(offset_ns)});
+                }
+            }
         }
     }
 }

@@ -249,7 +249,7 @@ pub fn initTimetype(allocator: Allocator) !void {
 
 // `initTimetype` MUST be called before any of these functions are used!
 
-fn utcOffset(instant: i64) i64 {
+pub fn utcOffset(instant: i64) i64 {
     std.debug.assert(tz_init);
     std.debug.assert(instant > instant_20220101);
     if (transitions) |trans| {
