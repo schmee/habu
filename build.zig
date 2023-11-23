@@ -2,9 +2,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{
-        .preferred_optimize_mode = .ReleaseSafe
-    });
+    const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .ReleaseSafe });
     const root_source_file = .{ .path = "src/main.zig" };
     const exe = b.addExecutable(.{
         .name = "habu",
@@ -22,8 +20,10 @@ pub fn build(b: *std.Build) !void {
     const version = "20231117";
     build_opts.addOption([]const u8, "version", version);
 
-    const git_commit_hash = b.exec(&.{"git", "rev-parse", "HEAD"});
-    build_opts.addOption([]const u8, "git_commit_hash", git_commit_hash[0..git_commit_hash.len - 1]); // Skip ending newline
+    const git_args: [3][]const u8 = [3][]const u8{ "git", "rev-parse", "HEAD" };
+    const git_commit_hash_result = try std.ChildProcess.run(.{ .allocator = std.heap.page_allocator, .argv = &git_args });
+    const git_commit_hash = git_commit_hash_result.stdout;
+    build_opts.addOption([]const u8, "git_commit_hash", git_commit_hash[0 .. git_commit_hash.len - 1]); // Skip ending newline
 
     const cross_step = b.step("cross", "Install cross-compiled executables");
 
