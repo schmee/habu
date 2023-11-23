@@ -163,7 +163,7 @@ pub const LocalDate = struct {
     }
 
     pub fn atStartOfWeek(self: Self) Self {
-        var instant = self.toEpoch();
+        const instant = self.toEpoch();
         const day_of_week = getWeekdayFromEpoch(instant);
         const ordinal = @intFromEnum(day_of_week);
         if (ordinal == 0)
@@ -271,7 +271,7 @@ pub fn initTimetypeWindows(allocator: Allocator) !void {
 
     var tz: TIME_DYNAMIC_ZONE_INFORMATION = undefined;
     const result = GetDynamicTimeZoneInformation(&tz);
-    if (result == TIME_ZONE_ID_INVALID ) {
+    if (result == TIME_ZONE_ID_INVALID) {
         return error.InvalidTimezone;
     }
 

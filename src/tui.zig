@@ -190,8 +190,8 @@ fn drawChain(comptime kind: main.Kind, w: anytype, ctx: *DrawContext, chain: *co
 
                 const should_draw_link = this_week_linked and
                     ((prev_week_linked and seen_so_far == 0) or
-                     (seen_so_far > 0 and seen_so_far < this_week_count) or
-                     (next_week_linked and seen_so_far >= this_week_count));
+                    (seen_so_far > 0 and seen_so_far < this_week_count) or
+                    (next_week_linked and seen_so_far >= this_week_count));
 
                 if (linked_on_day) {
                     drawGlyph(w, .box, link_color);
@@ -230,7 +230,7 @@ const DrawContext = struct {
 };
 
 pub fn drawChains(chains: []const *main.Chain, links: []const main.Link, start: LocalDate, end: LocalDate) !void {
-    var sow = std.io.getStdOut().writer();
+    const sow = std.io.getStdOut().writer();
     var buffered_writer = std.io.bufferedWriter(sow);
     var w = buffered_writer.writer();
     var ctx: DrawContext = .{
@@ -277,7 +277,7 @@ pub fn drawChains(chains: []const *main.Chain, links: []const main.Link, start: 
 }
 
 pub fn drawChainDetails(chain: *const main.Chain, links: []const main.Link, start: LocalDate, end: LocalDate) !void {
-    var sow = std.io.getStdOut().writer();
+    const sow = std.io.getStdOut().writer();
     var buffered_writer = std.io.bufferedWriter(sow);
     var w = buffered_writer.writer();
     var ctx: DrawContext = .{
@@ -331,9 +331,9 @@ fn writeText(w: anytype, left: []const u8, right: []const u8) void {
 }
 
 pub fn drawLinkDetails(chain: *const main.Chain, links: []const main.Link, link_index: usize) !void {
-    var sow = std.io.getStdOut().writer();
+    const sow = std.io.getStdOut().writer();
     var buffered_writer = std.io.bufferedWriter(sow);
-    var w = buffered_writer.writer();
+    const w = buffered_writer.writer();
     const cols: usize = 40;
     const mid = cols / 2;
     const in = mid - 3;

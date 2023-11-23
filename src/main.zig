@@ -201,7 +201,7 @@ const ChainDb = struct {
         return self.filtered_chains.items[index - 1];
     }
 
-    fn indexToId(self: *const Self, index: usize)?u16 {
+    fn indexToId(self: *const Self, index: usize) ?u16 {
         std.debug.assert(self.materialized);
         if (index == 0 or index > self.filtered_chains.items.len) return null;
         return self.filtered_chains.items[index - 1].id;
@@ -314,7 +314,7 @@ const LinkDb = struct {
             lowerBound(Link, d.prev().toEpoch(), self.links.items, {}, S.first)
         else
             0;
-        var links_in_range = self.links.items[i..];
+        const links_in_range = self.links.items[i..];
         std.sort.pdq(Link, links_in_range, {}, orderLinks);
         return links_in_range;
     }
@@ -323,7 +323,7 @@ const LinkDb = struct {
         var links = self.getAndSortLinks(local_date);
         const chain_start = LinkDb.chainStartIndex(links, chain_id) orelse return &.{};
         const chain_end = LinkDb.chainEndIndex(links, chain_id).?; // if there's a start there's an end
-        return links[chain_start .. chain_end];
+        return links[chain_start..chain_end];
     }
 
     fn getInsertIndex(links: []Link, chain_id: u16, timestamp: i64) struct { index: usize, occupied: bool } {
@@ -334,7 +334,7 @@ const LinkDb = struct {
         };
         var i = lowerBound(Link, timestamp, links, {}, S.first);
         const day = date.localAtStartOfDay(timestamp);
-        std.log.debug("getInsertIndex chain id {d} timestamp {d} -> i {d} len {d}", .{chain_id, timestamp, i, links.len});
+        std.log.debug("getInsertIndex chain id {d} timestamp {d} -> i {d} len {d}", .{ chain_id, timestamp, i, links.len });
 
         if (i == links.len) {
             while (i > 0) {
@@ -346,11 +346,11 @@ const LinkDb = struct {
             }
         }
 
-        std.log.debug("  i {d} day {d} links len {d}", .{i, day, links.len});
+        std.log.debug("  i {d} day {d} links len {d}", .{ i, day, links.len });
         while (i < links.len) : (i += 1) {
             const link = links[i];
             const link_day = link.localAtStartOfDay();
-            std.log.debug("  loop -> i {d} day {d} link day {d}", .{i, day, link_day});
+            std.log.debug("  loop -> i {d} day {d} link day {d}", .{ i, day, link_day });
             if (link_day > day) return .{ .index = i, .occupied = false };
             if (link.chain_id == chain_id and link_day == day) {
                 return .{ .index = i, .occupied = true };
@@ -400,7 +400,7 @@ const LinkDb = struct {
         try w.writeStruct(self.meta);
 
         const write_start = @sizeOf(LinkMeta) + self.first_write_index * @sizeOf(Link);
-        std.log.debug("LinkDb.persist -> items len {d} meta len {d} fwi {d} write start {d}", .{self.links.items.len, self.meta.len, self.first_write_index, write_start});
+        std.log.debug("LinkDb.persist -> items len {d} meta len {d} fwi {d} write start {d}", .{ self.links.items.len, self.meta.len, self.first_write_index, write_start });
         try self.file.seekTo(write_start);
         const link_bytes = std.mem.sliceAsBytes(self.links.items[self.first_write_index..]);
         try w.writeAll(link_bytes);
@@ -413,7 +413,7 @@ const LinkDb = struct {
                 return cid <= lhs.chain_id;
             }
         };
-        var index = lowerBound(Link, chain_id, links, {}, S.first);
+        const index = lowerBound(Link, chain_id, links, {}, S.first);
         if (index == links.len) return null;
         return if (links[index].chain_id == chain_id)
             index
@@ -446,19 +446,16 @@ const LinkDb = struct {
         defer seen.deinit();
         var n_links: usize = 0;
         for (self.links.items, 0..) |link, i| {
-            const chain_id_and_date = .{
-                .chain_id = link.chain_id,
-                .timestamp = link.localAtStartOfDay()
-            };
+            const chain_id_and_date = .{ .chain_id = link.chain_id, .timestamp = link.localAtStartOfDay() };
             if (seen.contains(chain_id_and_date)) {
-                std.log.info("LINK DB INCONSISTENT! Duplicate link i {d} {}", .{i, chain_id_and_date});
+                std.log.info("LINK DB INCONSISTENT! Duplicate link i {d} {}", .{ i, chain_id_and_date });
                 panic();
             }
             try seen.put(chain_id_and_date, {});
             n_links += 1;
         }
         if (n_links != self.meta.len) {
-            std.log.info("LINK DB INCONSISTENT! meta len and actual link count differ, meta len {d}, actual len {d}", .{self.meta.len, n_links});
+            std.log.info("LINK DB INCONSISTENT! meta len and actual link count differ, meta len {d}, actual len {d}", .{ self.meta.len, n_links });
             panic();
         }
     }
@@ -626,7 +623,6 @@ pub fn scratchPrint(comptime str: []const u8, args: anytype) []const u8 {
     return std.fmt.bufPrint(&scratch, str, args) catch panic();
 }
 
-
 fn formatEnumValuesForPrint(comptime E: type, allocator: Allocator) ![]const u8 {
     var strs: [@typeInfo(E).Enum.fields.len][]const u8 = undefined;
     inline for (comptime std.enums.values(E), 0..) |e, i| {
@@ -674,8 +670,8 @@ fn checkNumberOfArgs(allocator: Allocator, args: []const []const u8, max: usize)
     // The first element of `args` is the command which doesn't count
     const len = args.len - 1;
     if (len > max) {
-        const extra_args = try std.mem.join(allocator, ", ", args[max + 1..]);
-        printAndExit("Expected at most {} arguments, got {}, extra: [{s}]\n", .{max, len, extra_args});
+        const extra_args = try std.mem.join(allocator, ", ", args[max + 1 ..]);
+        printAndExit("Expected at most {} arguments, got {}, extra: [{s}]\n", .{ max, len, extra_args });
     }
 }
 
@@ -862,10 +858,10 @@ fn getConfigDirPath() ![]const u8 {
 fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
     var sow = std.io.getStdOut().writer();
 
-    var habu: struct { dir: std.fs.Dir, path: []const u8} = if (data_dir_path) |ddp| blk: {
+    const habu: struct { dir: std.fs.Dir, path: []const u8 } = if (data_dir_path) |ddp| blk: {
         if (!std.fs.path.isAbsolute(ddp))
             printAndExit("Expected absolute path, got '{s}'\n", .{ddp});
-        var data_dir = std.fs.openDirAbsolute(ddp, .{}) catch |err| switch (err) {
+        const data_dir = std.fs.openDirAbsolute(ddp, .{}) catch |err| switch (err) {
             error.FileNotFound => printAndExit("Could not open data dir at '{s}'\n", .{ddp}),
             else => return err,
         };
@@ -879,10 +875,10 @@ fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
             .windows => "habu",
             else => ".habu",
         };
-        var habu_dir = config_dir.openDir(habu_dir_path, .{}) catch |err| switch (err) {
+        const habu_dir = config_dir.openDir(habu_dir_path, .{}) catch |err| switch (err) {
             error.FileNotFound => dir: {
                 const dir = try config_dir.makeOpenPath(habu_dir_path, .{});
-                try sow.print("Created data dir at {s}/{s} (to remove habu, delete this directory)\n", .{config_dir_path, habu_dir_path});
+                try sow.print("Created data dir at {s}/{s} (to remove habu, delete this directory)\n", .{ config_dir_path, habu_dir_path });
                 break :dir dir;
             },
             else => return err,
@@ -901,7 +897,7 @@ fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
             const meta = ChainMeta{ .id_counter = 0, .len = 0 };
             var w = chains.writer();
             try w.writeStruct(meta);
-            std.log.debug("Wrote {s} to {s}", .{chains_filename, habu_dir_path});
+            std.log.debug("Wrote {s} to {s}", .{ chains_filename, habu_dir_path });
         }
     }
 
@@ -913,7 +909,7 @@ fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
             const meta = LinkMeta{ .len = 0 };
             var w = links.writer();
             try w.writeStruct(meta);
-            std.log.debug("Wrote {s} to {s}", .{links_filename, habu_dir_path});
+            std.log.debug("Wrote {s} to {s}", .{ links_filename, habu_dir_path });
         }
     }
 
@@ -950,7 +946,7 @@ fn parseOptionsAndPrepareArgs(allocator: Allocator, args: [][]const u8, options:
             _ = args_array.orderedRemove(i);
             const show_str = args_array.orderedRemove(i);
             options.show = std.meta.stringToEnum(Show, show_str) orelse
-                printAndExit("Invalid argument to --show, expected one of {s}, got {s}\n", .{try formatEnumValuesForPrint(Show, allocator), show_str});
+                printAndExit("Invalid argument to --show, expected one of {s}, got {s}\n", .{ try formatEnumValuesForPrint(Show, allocator), show_str });
             hit = true;
         }
         if (!hit)
@@ -966,9 +962,9 @@ pub fn main() !void {
     if (builtin.os.tag == .windows)
         _ = std.os.windows.kernel32.SetConsoleOutputCP(65001);
 
-    var c_allocator = std.heap.c_allocator;
+    const c_allocator = std.heap.c_allocator;
     var arena = std.heap.ArenaAllocator.init(c_allocator);
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
     defer arena.deinit();
 
     const start = try std.time.Instant.now();
@@ -978,7 +974,7 @@ pub fn main() !void {
     }
     try date.initTimetype(allocator);
 
-    var stdout_writer = std.io.getStdOut().writer();
+    const stdout_writer = std.io.getStdOut().writer();
     var buffered_writer = std.io.bufferedWriter(stdout_writer);
     var sow = buffered_writer.writer();
     defer buffered_writer.flush() catch panic();
@@ -1005,7 +1001,7 @@ pub fn main() !void {
 
             const kind_str = expectArg(args, 2, "kind");
             const kind = std.meta.stringToEnum(Kind, kind_str) orelse
-                printAndExit("Invalid kind '{s}', expected one of {s}\n", .{trunc(kind_str), try formatEnumValuesForPrint(Kind, allocator)});
+                printAndExit("Invalid kind '{s}', expected one of {s}\n", .{ trunc(kind_str), try formatEnumValuesForPrint(Kind, allocator) });
 
             const min_days = blk: {
                 if (kind == .weekly) {
@@ -1040,7 +1036,6 @@ pub fn main() !void {
             const range = parseRangeOrExit(null, null);
             const links = link_db.getAndSortLinks(range.start);
             try tui.drawChains(chains, links, range.start, range.end);
-
         },
         .info => {
             try checkNumberOfArgs(allocator, args, 2);
@@ -1058,16 +1053,17 @@ pub fn main() !void {
                 const chain_links = link_db.getLinksForChain(cid_and_index.id, link_date.prev());
                 const result = LinkDb.getInsertIndex(chain_links, cid_and_index.id, link_date.toEpoch());
                 if (!result.occupied)
-                    printAndExit("No link found at date '{s}' for chain {d}\n", .{trunc(str), cid_and_index.index});
+                    printAndExit("No link found at date '{s}' for chain {d}\n", .{ trunc(str), cid_and_index.index });
 
                 try tui.drawLinkDetails(chain, chain_links, result.index);
             } else { // Show chain info
                 const range = if (chain.isActive())
                     parseRangeOrExit(null, null)
-                else Range{
-                    .start = LocalDate.fromEpoch(chain.stopped - 30 * date.secs_per_day),
-                    .end = LocalDate.fromEpoch(chain.stopped),
-                };
+                else
+                    Range{
+                        .start = LocalDate.fromEpoch(chain.stopped - 30 * date.secs_per_day),
+                        .end = LocalDate.fromEpoch(chain.stopped),
+                    };
                 const chain_links = link_db.getLinksForChain(cid_and_index.id, null);
                 try tui.drawChainDetails(chain, chain_links, range.start, range.end);
             }
@@ -1078,7 +1074,7 @@ pub fn main() !void {
             const chains = chain_db.getChains();
 
             try link_db.materialize(chain_db.meta.len);
-            var links = link_db.getAndSortLinks(null);
+            const links = link_db.getAndSortLinks(null);
 
             var jw = std.json.writeStreamMaxDepth(sow, .{ .whitespace = .indent_4 }, 8);
 
@@ -1149,7 +1145,7 @@ pub fn main() !void {
             try checkNumberOfArgs(allocator, args, 0);
             var r = std.io.getStdIn().reader();
             const bytes = try r.readAllAlloc(allocator, 200_000);
-            var root = (try std.json.parseFromSliceLeaky(std.json.Value, allocator, bytes, .{}));
+            const root = (try std.json.parseFromSliceLeaky(std.json.Value, allocator, bytes, .{}));
 
             var all_chains = std.ArrayList(Chain).init(allocator);
             var all_links = std.ArrayList(Link).init(allocator);
@@ -1414,10 +1410,10 @@ pub fn main() !void {
             const link_date = parseLocalDateOrExit(date_str, "link").toEpoch();
 
             try link_db.materialize(chain_db.meta.len);
-            var result = LinkDb.getInsertIndex(link_db.links.items, cid_and_index.id, link_date);
+            const result = LinkDb.getInsertIndex(link_db.links.items, cid_and_index.id, link_date);
             if (!result.occupied)
-                printAndExit("No link found at date '{s}' for chain {d}\n", .{trunc(date_str), cid_and_index.index});
-            var index = result.index;
+                printAndExit("No link found at date '{s}' for chain {d}\n", .{ trunc(date_str), cid_and_index.index });
+            const index = result.index;
 
             var link = &link_db.links.items[index];
             link_db.first_write_index = index;
@@ -1442,7 +1438,7 @@ pub fn main() !void {
                     try sow.print("UTC offset: {}\n", .{std.fmt.fmtDurationSigned(offset_ns)});
                 }
             }
-        }
+        },
     }
 
     if (builtin.os.tag == .windows)
