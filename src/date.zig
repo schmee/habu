@@ -8,7 +8,7 @@ const Allocator = std.mem.Allocator;
 pub const secs_per_day: i64 = 60 * 60 * 24;
 pub const max_weeks_per_year: u8 = 53;
 
-const Weekday = enum(u3) {
+pub const Weekday = enum(u3) {
     mon = 0,
     tue,
     wed,
@@ -16,6 +16,31 @@ const Weekday = enum(u3) {
     fri,
     sat,
     sun,
+};
+
+pub const weekday_names = [_][]const u8{
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+};
+
+const month_names = [_][]const u8{
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 };
 
 const start_year: i64 = 2022;
@@ -47,29 +72,10 @@ pub const LocalDate = struct {
 
     const Self = @This();
 
-    pub fn parse(yyyymmdd: []const u8) !Self {
-        if (yyyymmdd.len != 8) return error.BadFormat;
-
-        const year = std.fmt.parseInt(u16, yyyymmdd[0..4], 10) catch |err| switch (err) {
-            error.Overflow => unreachable, // all four-digit numbers fit into a u16
-            else => |e| return e,
-        };
+    pub fn init(year: u16, month: u8, day: u8) !Self {
         if (year < 2022) return error.YearBefore2022;
-
-        const month = std.fmt.parseInt(u8, yyyymmdd[4..6], 10) catch |err| switch (err) {
-            error.Overflow => unreachable, // all two-digit numbers fit into a u8
-            else => |e| return e,
-        };
         if (month < 1 or month > 12) return error.MonthOutOfRange;
-
-        const leap_year_kind = if (epoch.isLeapYear(year)) epoch.YearLeapKind.leap else epoch.YearLeapKind.not_leap;
-        const days_in_month = epoch.getDaysInMonth(leap_year_kind, @as(epoch.Month, @enumFromInt(month)));
-        const day = std.fmt.parseInt(u8, yyyymmdd[6..8], 10) catch |err| switch (err) {
-            error.Overflow => unreachable, // all two-digit numbers fit into a u8
-            else => |e| return e,
-        };
-
-        if (day > days_in_month) return error.DayOutOfRange;
+        if (day > getDaysInMonth(year, month)) return error.DayOutOfRange;
 
         return .{
             .year = year,
@@ -77,6 +83,27 @@ pub const LocalDate = struct {
             .day = day,
             .local = true,
         };
+    }
+
+    pub fn parse(yyyymmdd: []const u8) !Self {
+        if (yyyymmdd.len != 8) return error.BadFormat;
+
+        const year = std.fmt.parseInt(u16, yyyymmdd[0..4], 10) catch |err| switch (err) {
+            error.Overflow => unreachable, // all four-digit numbers fit into a u16
+            else => |e| return e,
+        };
+
+        const month = std.fmt.parseInt(u8, yyyymmdd[4..6], 10) catch |err| switch (err) {
+            error.Overflow => unreachable, // all two-digit numbers fit into a u8
+            else => |e| return e,
+        };
+
+        const day = std.fmt.parseInt(u8, yyyymmdd[6..8], 10) catch |err| switch (err) {
+            error.Overflow => unreachable, // all two-digit numbers fit into a u8
+            else => |e| return e,
+        };
+
+        return Self.init(year, month, day);
     }
 
     pub fn fromEpoch(instant: i64) LocalDate {
@@ -162,6 +189,25 @@ pub const LocalDate = struct {
         };
     }
 
+    pub fn oneMonthAgo(self: Self) Self {
+        var month = (self.month - 1) % 13;
+        if (month == 0) month += 1;
+        const year = if (self.month == 1 and month == 12) self.year - 1 else self.year;
+        return .{
+            .year = year,
+            .month = month,
+            .day = @min(self.day, getDaysInMonth(year, month)),
+            .local = false,
+        };
+    }
+
+    pub fn prevMonthAtDay(self: Self, day: u8) !Self {
+        var month = (self.month - 1) % 13;
+        if (month == 0) month += 1;
+        const year = if (self.month == 1 and month == 12) self.year - 1 else self.year;
+        return Self.init(year, month, day);
+    }
+
     pub fn atStartOfWeek(self: Self) Self {
         var instant = self.toEpoch();
         const day_of_week = getWeekdayFromEpoch(instant);
@@ -220,6 +266,10 @@ pub const LocalDateTime = struct {
         return buf;
     }
 };
+
+pub fn monthName(month: u8) []const u8 {
+    return month_names[month - 1];
+}
 
 pub fn epochAtStartOfDay(instant: i64) i64 {
     const es = std.time.epoch.EpochSeconds{ .secs = @as(u64, @intCast(instant)) };

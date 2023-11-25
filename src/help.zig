@@ -39,9 +39,9 @@ pub const help_str =
 \\       Can be combined (duplicates are allowed): 1,3-5,2-4
 \\
 \\Dates:
-\\       t, today      -   Today
-\\       y, yesterday  -   Yesterday
-\\       YYYYMMDD      -   Arbitrary date
+\\
+++ dates_help ++
+\\
 \\
 \\Tags:
 \\       Links can be tagged to make your tracking more precise.
@@ -50,6 +50,14 @@ pub const help_str =
 \\       You can add up to 4 tags per chain.
 \\       Tags are added to links as a comma-sperated list: 'tag1,tag2,tag3'
 \\
+;
+
+pub const dates_help = \\       t, today                    -   Today
+                       \\       y, yesterday                -   Yesterday
+                       \\       yyyyMMdd                    -   Date (20220101...)
+                       \\       <weekday>                   -   Weekday (mon/monday, tue/tuesday...)
+                       \\       <n>                         -   `n` days ago (1, 2, ... , 99)
+                       \\       <n>st, <n>nd, <n>rd, <n>th  -   `n`th day of the month (n <= today) / `n`th day of previous month (n >= today)
 ;
 
 pub fn commandHelp(command: Command) ?[]const u8 {

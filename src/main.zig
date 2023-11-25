@@ -740,25 +740,86 @@ fn parseMinDaysOrExit(str: []const u8) u8 {
 }
 
 fn parseLocalDateOrExit(str: []const u8, label: []const u8) LocalDate {
+    const S = struct {
+        fn printDateHelpAndExit(str_: []const u8, label_: []const u8, msg: []const u8) noreturn {
+            printAndExit("Invalid {s} date '{s}', {s}\n\nValid date formats:\n{s}\n", .{label_, str_, msg, help.dates_help});
+        }
+    };
+
     if (std.mem.eql(u8, str, "y") or std.mem.eql(u8, str, "yesterday")) {
         return LocalDate.fromEpoch(date.epochNowLocal() - date.secs_per_day);
     }
+
     if (std.mem.eql(u8, str, "t") or std.mem.eql(u8, str, "today")) {
         return LocalDate.fromEpoch(date.epochNowLocal());
     }
+
+    // Weekdays: mon/monday, tue/tuesday etc.
+    if (str.len >= 3) {
+        if (std.meta.stringToEnum(date.Weekday, str[0..3])) |target_day| {
+
+            const name = date.weekday_names[@intFromEnum(target_day)];
+            if (str.len > name.len or !std.mem.eql(u8, str, name[0..str.len]))
+                S.printDateHelpAndExit(str, label, "not a weekday");
+
+            const now = date.epochNowLocal();
+            const today = date.getWeekdayFromEpoch(now);
+            const diff = @as(i64, @intCast(@intFromEnum(today))) - @as(i64, @intCast(@intFromEnum(target_day)));
+            const n_days = (diff + @as(i64, if (diff >= 0) 0 else 7));
+            const target_day_epoch = now - n_days * date.secs_per_day;
+            return LocalDate.fromEpoch(target_day_epoch);
+        }
+    }
+
+    // Ordinals: 1st, 2nd, 3rd...
+    if (
+         std.mem.endsWith(u8, str, "st") or
+         std.mem.endsWith(u8, str, "nd") or
+         std.mem.endsWith(u8, str, "th") or
+         std.mem.endsWith(u8, str, "rd")
+    ) {
+        var today = LocalDate.fromEpoch(date.epochNowLocal());
+
+        // For errors, TODO make lazy
+        const last_month = today.oneMonthAgo();
+        const last_month_name = date.monthName(last_month.month);
+        const last_month_n_days = date.getDaysInMonth(last_month.year, last_month.month);
+        const out_of_range_msg = scratchPrint("out of range for {s} which has {d} days", .{last_month_name, last_month_n_days});
+
+        const day_number_signed = std.fmt.parseInt(i64, str[0..str.len - 2], 10) catch |err| switch (err) {
+            error.Overflow => S.printDateHelpAndExit(str, label, out_of_range_msg),
+            else => S.printDateHelpAndExit(str, label, "does not match any format"),
+        };
+        if (day_number_signed < 1)
+            S.printDateHelpAndExit(str, label, "does not match any format");
+        if (day_number_signed > 31)
+            S.printDateHelpAndExit(str, label, out_of_range_msg);
+        const day_number: u8 = @intCast(day_number_signed);
+        return if (day_number <= today.day)
+            LocalDate.init(today.year, today.month, day_number) catch unreachable
+        else
+            today.prevMonthAtDay(day_number) catch |err| switch (err) {
+                error.DayOutOfRange => S.printDateHelpAndExit(str, label, out_of_range_msg),
+                else => unreachable,
+            };
+    }
+
+    // Offset: `n` days ago
+    if (std.ascii.isDigit(str[0]) and str.len <= 2) {
+        const offset = std.fmt.parseInt(i64, str, 10) catch S.printDateHelpAndExit(str, label, "does not match any format");
+        var epoch = date.epochNowLocal() - offset * date.secs_per_day;
+        return LocalDate.fromEpoch(epoch);
+    }
+
     return LocalDate.parse(str) catch |err| {
         const msg = switch (err) {
-            error.BadFormat => "expected 'yyyyMMdd'",
-            error.InvalidCharacter => "invalid character",
+            error.BadFormat => "does not match any format",
+            error.InvalidCharacter => "does not match any format",
             error.YearBefore2022 => "year before 2022 not supported",
             error.MonthOutOfRange => scratchPrint("month '{s}' out of range", .{str[4..6]}),
             error.DayOutOfRange => scratchPrint("day '{s}' out of range", .{str[6..8]}),
         };
-        var w = std.io.getStdOut().writer();
-        w.print("Invalid {s} date, ", .{label}) catch panic();
-        w.writeAll(msg) catch panic();
-        w.writeByte('\n') catch panic();
-        std.process.exit(0);
+        S.printDateHelpAndExit(str, label, msg);
     };
 }
 

@@ -1,3 +1,10 @@
+### 20231126
+
+- Add new date formats
+    - Nth, Nst, Nrd, Nnd: Nth day of the current month is N >= today, else Nth day of previous month
+    - Weekdays: mon/monday, tue/tuesday...
+    - N: N days ago (1, 2, 3...)
+
 ### 20231117
 
 #### Windows support
