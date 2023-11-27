@@ -130,10 +130,9 @@ pub const LocalDate = struct {
         while (y < self.year) : (y += 1) {
             instant += epoch.getDaysInYear(y) * secs_per_day;
         }
-        var m: u16 = 1;
-        const leap_year_kind = if (epoch.isLeapYear(self.year)) epoch.YearLeapKind.leap else epoch.YearLeapKind.not_leap;
+        var m: u8 = 1;
         while (m < self.month) : (m += 1) {
-            instant += epoch.getDaysInMonth(leap_year_kind, @as(epoch.Month, @enumFromInt(m))) * secs_per_day;
+            instant += getDaysInMonth(self.year, m) * secs_per_day;
         }
         return instant + (self.day - 1) * secs_per_day;
     }
