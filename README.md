@@ -14,7 +14,7 @@ Grab the latest build from the [releases](https://github.com/schmee/habu/release
 
 ## Building
 
-Habu is primarily tested on macOS, but Linux is also supported (there is no Windows support yet).
+Habu runs on macOS, Linux and Windows.
 
 1. Download Zig 0.11.0 for your platform from https://ziglang.org/download/.
 1. Clone this repo.
@@ -23,9 +23,9 @@ Habu is primarily tested on macOS, but Linux is also supported (there is no Wind
 
 ## Note on stability
 
-Although Habu is stable enough for daily use, it should still be considered experimental. It is recommended to regularly back up your `.habu` directory, especially before upgrading to a new version.
+Habu is stable enough for daily use, but it should still be considered experimental. It is recommended to back up your `.habu` directory regularly, especially before upgrading to a new version.
 
-The versioning philosophy is to avoid breaking changes whenever possible, for both the data format and the CLI, but there might be cases where breaking changes are necessary. If they do occur, they will be always be pointed out explicitly in the CHANGELOG and include instructions on how to upgrade.
+Breaking changes are avoided whenever possible for both the data format and the CLI. If they do occur, they will be always be pointed out explicitly in the CHANGELOG and include instructions on how to upgrade.
 
 ## Getting started
 
