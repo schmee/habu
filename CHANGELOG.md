@@ -1,3 +1,7 @@
+### Unreleased
+
+- Fix bug in week number calculation when transitioning from one year to the next.
+
 ### 20231126
 
 - Add new date formats

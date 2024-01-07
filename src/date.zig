@@ -60,8 +60,8 @@ pub fn getWeekNumberFromEpoch(instant: i64) u64 {
     const epoch_seconds = std.time.epoch.EpochSeconds{ .secs = @as(u64, @intCast(instant)) };
     const epoch_day = epoch_seconds.getEpochDay();
     const year_day = epoch_day.calculateYearDay();
-    const day = if (year_day.day == 0) epoch.getDaysInYear(year_day.year) else year_day.day - 1;
-    return @divFloor(day, 7) + 1;
+    const weekday: u64 = @intFromEnum(getWeekdayFromEpoch(instant));
+    return @divFloor(year_day.day + 7 - (weekday % 7), 7);
 }
 
 pub const LocalDate = struct {
