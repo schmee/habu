@@ -745,6 +745,16 @@ fn parseMinDaysOrExit(str: []const u8) u8 {
 }
 
 fn parseLocalDateOrExit(str: []const u8, label: []const u8) LocalDate {
+    const parsed = parseLocalDateOrExitInternal(str, label);
+    const now = date.epochNow();
+    if (parsed.toEpoch() > now) {
+        const now_local_date = LocalDate.epochToLocal(now);
+        printAndExit("Invalid {s} date '{s}', dates must be less than or equal to today ({s})\n", .{label, parsed.asString(), now_local_date.asString()});
+    }
+    return parsed;
+}
+
+fn parseLocalDateOrExitInternal(str: []const u8, label: []const u8) LocalDate {
     const S = struct {
         fn printDateHelpAndExit(str_: []const u8, label_: []const u8, msg: []const u8) noreturn {
             printAndExit("Invalid {s} date '{s}', {s}\n\nValid date formats:\n{s}\n", .{label_, str_, msg, help.dates_help});
