@@ -1,6 +1,9 @@
 ### Unreleased
 
-- Fix bug in week number calculation when transitioning from one year to the next.
+#### Bugfixes
+
+- Fix week number calculation when transitioning from one year to the next.
+- Fix date parsing when using the `nth` syntax and selecting a date in a previous year.
 
 ### 20231126
 

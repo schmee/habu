@@ -166,45 +166,37 @@ pub const LocalDate = struct {
         var month = if (next_day < self.day) (self.month + 1) % 13 else self.month;
         if (month == 0) month += 1;
         const year = if (self.month == 12 and month == 1) self.year + 1 else self.year;
-        return .{
-            .year = year,
-            .month = month,
-            .day = next_day,
-            .local = self.local,
-        };
+        const the_next = Self.init(year, month, next_day) catch unreachable;
+        std.debug.assert(the_next.toEpoch() > self.toEpoch());
+        return the_next;
     }
 
     pub fn prev(self: Self) Self {
         var prev_day = (self.day - 1) % (getDaysInMonth(self.year, self.month) + 1);
         if (prev_day == 0) prev_day += 1;
         var month = if (prev_day < self.day) (self.month - 1) % 13 else self.month;
-        if (month == 0) month += 1;
+        if (month == 0) month = 12;
         const year = if (self.month == 1 and month == 12) self.year - 1 else self.year;
-        return .{
-            .year = year,
-            .month = month,
-            .day = prev_day,
-            .local = self.local,
-        };
+        const the_prev = Self.init(year, month, prev_day) catch unreachable;
+        std.debug.assert(the_prev.toEpoch() < self.toEpoch());
+        return the_prev;
     }
 
     pub fn oneMonthAgo(self: Self) Self {
-        var month = (self.month - 1) % 13;
-        if (month == 0) month += 1;
+        const month = if (self.month == 1) 12 else self.month - 1;
         const year = if (self.month == 1 and month == 12) self.year - 1 else self.year;
-        return .{
-            .year = year,
-            .month = month,
-            .day = @min(self.day, getDaysInMonth(year, month)),
-            .local = false,
-        };
+        const day = @min(self.day, getDaysInMonth(year, month));
+        const one_month_ago = Self.init( year, month, day) catch unreachable;
+        std.debug.assert(one_month_ago.toEpoch() < self.toEpoch());
+        return one_month_ago;
     }
 
     pub fn prevMonthAtDay(self: Self, day: u8) !Self {
-        var month = (self.month - 1) % 13;
-        if (month == 0) month += 1;
+        const month = if (self.month == 1) 12 else self.month - 1;
         const year = if (self.month == 1 and month == 12) self.year - 1 else self.year;
-        return Self.init(year, month, day);
+        const prev_month_at_day = try Self.init(year, month, day);
+        std.debug.assert(prev_month_at_day.toEpoch() < self.toEpoch());
+        return prev_month_at_day;
     }
 
     pub fn atStartOfWeek(self: Self) Self {
