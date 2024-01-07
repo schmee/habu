@@ -6,7 +6,7 @@ const windows = std.os.windows;
 const Allocator = std.mem.Allocator;
 
 pub const secs_per_day: i64 = 60 * 60 * 24;
-pub const max_weeks_per_year: u8 = 53;
+pub const max_weeks_per_year: u8 = 52;
 
 pub const Weekday = enum(u3) {
     mon = 0,
