@@ -445,11 +445,16 @@ const LinkDb = struct {
         var seen = std.AutoHashMap(ChainIdAndDate, void).init(self.allocator);
         defer seen.deinit();
         var n_links: usize = 0;
+        var now = date.epochNowLocal();
         for (self.links.items, 0..) |link, i| {
             const chain_id_and_date = .{
                 .chain_id = link.chain_id,
                 .timestamp = link.localAtStartOfDay()
             };
+            if (link.local() > now) {
+                std.log.info("LINK DB INCONSISTENT! link timestamp in future! link index {d} {}", .{i, chain_id_and_date});
+                panic();
+            }
             if (seen.contains(chain_id_and_date)) {
                 std.log.info("LINK DB INCONSISTENT! Duplicate link i {d} {}", .{i, chain_id_and_date});
                 panic();
