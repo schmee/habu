@@ -481,14 +481,14 @@ fn orderLinksTimestamp(ctx: void, a: Link, b: Link) bool {
     return a.timestamp < b.timestamp;
 }
 
-const Stats = struct {
+pub const Stats = struct {
     longest_gap: usize,
     longest_streak: usize,
     times_broken: usize,
     fulfillment: [32]u8,
 };
 
-pub fn computeStats(chain: *const Chain, links: []const Link) Stats {
+fn computeStats(allocator: Allocator, chain: *const Chain, links: []const Link) !Stats {
     if (links.len == 0) {
         var stats = Stats{
             .longest_streak = 0,
@@ -550,16 +550,29 @@ pub fn computeStats(chain: *const Chain, links: []const Link) Stats {
                 .fulfillment = fulfillment,
             };
         },
-        // TODO: handle chains spanning multiple years
         .weekly => {
-            var week_is_linked = std.mem.zeroes([52]u8);
-            var min_week: usize = 53;
-            var max_week: usize = 0;
+            const Weeks = [date.max_weeks_per_year + 1]u8;
+            const YearWeeks = struct {
+                weeks: Weeks = std.mem.zeroes(Weeks),
+                min_week: u16 = 53,
+                max_week: u16 = 0,
+            };
+            var year_weeks = std.AutoArrayHashMap(u16, YearWeeks).init(allocator);
             for (links) |link| {
-                const week = date.getWeekNumberFromEpoch(link.local());
-                week_is_linked[week] += 1;
-                min_week = @min(week, min_week);
-                max_week = @max(week, max_week);
+                const local = link.local();
+                var week: u16 = @intCast(date.getWeekNumberFromEpoch(local));
+                var year = LocalDate.fromEpoch(local).year;
+                if (week == 0) {
+                    year -= 1;
+                    week = 52;
+                }
+                var gop = try year_weeks.getOrPut(year);
+                if (!gop.found_existing)
+                    gop.value_ptr.* = .{};
+                var year_stats = gop.value_ptr;
+                year_stats.weeks[week] += 1;
+                year_stats.min_week = @min(week, year_stats.min_week);
+                year_stats.max_week = @max(week, year_stats.max_week);
             }
             var gap: usize = 0;
             var max_gap: usize = 0;
@@ -567,25 +580,35 @@ pub fn computeStats(chain: *const Chain, links: []const Link) Stats {
             var max_streak: usize = 0;
             var times_broken: usize = 0;
             var weeks_completed: usize = 0;
-            const weeks = week_is_linked[min_week .. max_week + 1];
-            for (weeks) |n| {
-                if (n < chain.min_days) {
-                    gap += 1;
-                    if (streak > 0)
-                        times_broken += 1;
-                    max_streak = @max(streak, max_streak);
-                    streak = 0;
-                } else {
-                    max_gap = @max(gap, max_gap);
-                    gap = 0;
-                    streak += 1;
-                    weeks_completed += 1;
+            var n_weeks: usize = 0;
+
+            for (year_weeks.values(), 0..) |stats, i| {
+                const weeks: []const u8 = if (i == 0)
+                    stats.weeks[stats.min_week..]
+                        else if (i == year_weeks.count() - 1)
+                    stats.weeks[0..stats.max_week]
+                        else
+                    &stats.weeks;
+                for (weeks) |n| {
+                    if (n < chain.min_days) {
+                        gap += 1;
+                        if (streak > 0)
+                            times_broken += 1;
+                        max_streak = @max(streak, max_streak);
+                        streak = 0;
+                    } else {
+                        max_gap = @max(gap, max_gap);
+                        gap = 0;
+                        streak += 1;
+                        weeks_completed += 1;
+                    }
+                    n_weeks += 1;
                 }
             }
 
-            const percentage = @as(f32, @floatFromInt(weeks_completed)) / @as(f32, @floatFromInt(weeks.len)) * 100;
+            const percentage = @as(f32, @floatFromInt(weeks_completed)) / @as(f32, @floatFromInt(n_weeks)) * 100;
             var fulfillment = std.mem.zeroes([32]u8);
-            _ = std.fmt.bufPrint(&fulfillment, "{d}/{d} ({d:.2}%)", .{ weeks_completed, weeks.len, percentage }) catch unreachable;
+            _ = std.fmt.bufPrint(&fulfillment, "{d}/{d} ({d:.2}%)", .{ weeks_completed, n_weeks, percentage }) catch unreachable;
 
             return .{
                 .longest_gap = @max(gap, max_gap),
@@ -1136,7 +1159,7 @@ pub fn main() !void {
                 if (!result.occupied)
                     printAndExit("No link found at date '{s}' for chain {d}\n", .{trunc(str), cid_and_index.index});
 
-                try tui.drawLinkDetails(chain, chain_links, result.index);
+                try tui.drawLinkInfo(chain, chain_links, result.index);
             } else { // Show chain info
                 const range = if (chain.isActive())
                     parseRangeOrExit(null, null)
@@ -1145,7 +1168,8 @@ pub fn main() !void {
                     .end = LocalDate.fromEpoch(chain.stopped),
                 };
                 const chain_links = link_db.getLinksForChain(cid_and_index.id, null);
-                try tui.drawChainDetails(chain, chain_links, range.start, range.end);
+                const stats = try computeStats(allocator, chain, chain_links);
+                try tui.drawChainInfo(chain, chain_links, &stats, range.start, range.end);
             }
         },
         .@"export" => {

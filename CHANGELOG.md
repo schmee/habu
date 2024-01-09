@@ -5,6 +5,7 @@
 - Fix week number calculation when transitioning from one year to the next.
 - Fix date parsing when using the `nth` syntax and selecting a date in a previous year.
 - Fix bug that would sometimes cause weekly chains spanning a year transition to appear broken.
+- Fix chain `info` stats for chains spanning multiple years.
 
 ### 20231126
 

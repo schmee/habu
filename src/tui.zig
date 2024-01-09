@@ -5,6 +5,7 @@ const main = @import("main.zig");
 
 const LocalDate = date.LocalDate;
 const Rgb = color.Rgb;
+const Stats = main.Stats;
 
 const UBOX = "\u{2588}";
 const UDASHLONG = "\u{2504}";
@@ -276,7 +277,7 @@ pub fn drawChains(chains: []const *main.Chain, links: []const main.Link, start: 
     buffered_writer.flush() catch unreachable;
 }
 
-pub fn drawChainDetails(chain: *const main.Chain, links: []const main.Link, start: LocalDate, end: LocalDate) !void {
+pub fn drawChainInfo(chain: *const main.Chain, links: []const main.Link, stats: *const Stats, start: LocalDate, end: LocalDate) !void {
     var sow = std.io.getStdOut().writer();
     var buffered_writer = std.io.bufferedWriter(sow);
     var w = buffered_writer.writer();
@@ -295,7 +296,6 @@ pub fn drawChainDetails(chain: *const main.Chain, links: []const main.Link, star
     }
     verticalSpace(w, 2);
 
-    const stats = main.computeStats(chain, links);
     writeText(w, "Details", "");
     writeText(w, "  Id:", main.scratchPrint("{d}", .{chain.id}));
     writeText(w, "  Name:", main.scratchPrint("{s}", .{chain.name[0..chain.name_len]}));
@@ -330,7 +330,7 @@ fn writeText(w: anytype, left: []const u8, right: []const u8) void {
     indent(w, default_margin);
 }
 
-pub fn drawLinkDetails(chain: *const main.Chain, links: []const main.Link, link_index: usize) !void {
+pub fn drawLinkInfo(chain: *const main.Chain, links: []const main.Link, link_index: usize) !void {
     var sow = std.io.getStdOut().writer();
     var buffered_writer = std.io.bufferedWriter(sow);
     var w = buffered_writer.writer();
