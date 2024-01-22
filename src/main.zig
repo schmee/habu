@@ -162,7 +162,7 @@ const ChainDb = struct {
         var r = self.file.reader();
         const stat = try self.file.stat();
         // Pre-allocate space for one additional chain
-        var bytes = try self.allocator.alloc(u8, stat.size + @sizeOf(Chain));
+        var bytes = try self.allocator.allocWithOptions(u8, stat.size + @sizeOf(Chain), @alignOf(Chain), null);
         _ = try r.readAll(bytes);
 
         self.meta = @bitCast(bytes[0..@sizeOf(ChainMeta)].*);
@@ -283,7 +283,7 @@ const LinkDb = struct {
         std.debug.assert(!self.materialized);
 
         const stat = try self.file.stat();
-        var bytes = try self.allocator.alloc(u8, stat.size + n_chains * @sizeOf(Link));
+        var bytes = try self.allocator.allocWithOptions(u8, stat.size + n_chains * @sizeOf(Link), @alignOf(Link), null);
 
         try self.file.seekTo(0);
         var r = self.file.reader();
