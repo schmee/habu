@@ -8,7 +8,11 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Set up Zig
@@ -18,6 +22,14 @@ jobs:
 
       - name: Check out repository
         uses: actions/checkout@v3
+
+      - name: Zig build test Debug
+        run: |
+          zig build test
+
+      - name: Zig build test Release
+        run: |
+          zig build test -Drelease
 
       - name: Zig build cross
         run: |

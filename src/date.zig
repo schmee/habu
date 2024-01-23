@@ -148,6 +148,12 @@ pub const LocalDate = struct {
         return buf;
     }
 
+    pub fn yyyyMMdd(self: Self) [8]u8 {
+        var buf: [8]u8 = undefined;
+        _ = std.fmt.bufPrint(&buf, "{d}{d:0>2}{d:0>2}", .{ self.year, self.month, self.day }) catch unreachable;
+        return buf;
+    }
+
     pub fn compare(self: Self, other: Self) std.math.Order {
         return switch (std.math.order(self.year, other.year)) {
             .lt => .lt,
@@ -273,8 +279,17 @@ pub fn daysBetween(a: i64, b: i64) u64 {
     return @divFloor(@as(u64, @intCast(b - a)), secs_per_day) -| 1;
 }
 
+var constant_now: ?i64 = null;
+
+pub fn overrideNow(now: i64) void {
+    constant_now = now;
+}
+
 pub fn epochNow() i64 {
-    return std.time.timestamp();
+    return if (constant_now) |now|
+        now
+    else
+        std.time.timestamp();
 }
 
 pub const Transition = struct {
@@ -282,17 +297,34 @@ pub const Transition = struct {
     offset: i32,
 };
 
-pub fn initTimetype(allocator: Allocator) !void {
-    switch (builtin.os.tag) {
-        .windows => try initTimetypeWindows(allocator),
-        else => try initTimetypePosix(allocator),
-    }
+pub fn initTransitions(allocator: Allocator, transitions_str: ?[]const u8) !void {
+    transitions = if (transitions_str) |str|
+        try initTransitionsFromStr(allocator, str)
+    else switch (builtin.os.tag) {
+        .windows => try initTransitionsWindows(allocator),
+        else => try initTransitionsPosix(allocator),
+    };
+    tz_init = true;
 }
 
-pub fn initTimetypePosix(allocator: Allocator) !void {
+fn initTransitionsFromStr(allocator: Allocator, transitions_str: []const u8) !?[]const Transition {
+    var root = (try std.json.parseFromSliceLeaky(std.json.Value, allocator, transitions_str, .{}));
+    var transitions_array = std.ArrayList(Transition).init(allocator);
+    for (root.array.items) |v| {
+        const obj = v.object;
+        const transition = Transition{
+            .ts = @intCast(obj.get("ts").?.integer),
+            .offset = @intCast(obj.get("offset").?.integer),
+        };
+        try transitions_array.append(transition);
+    }
+    return try transitions_array.toOwnedSlice();
+}
+
+fn initTransitionsPosix(allocator: Allocator) !?[]const Transition {
     defer tz_init = true;
     var db = getUserTimeZoneDb(allocator) catch |err| switch (err) {
-        error.FileNotFound => return, // Assume UTC
+        error.FileNotFound => return null, // Assume UTC
         else => return err,
     };
     defer db.deinit();
@@ -304,12 +336,10 @@ pub fn initTimetypePosix(allocator: Allocator) !void {
             .offset = t.timetype.offset,
         });
     }
-    transitions = try transitions_array.toOwnedSlice();
+    return try transitions_array.toOwnedSlice();
 }
 
-pub fn initTimetypeWindows(allocator: Allocator) !void {
-    defer tz_init = true;
-
+fn initTransitionsWindows(allocator: Allocator) !?[]const Transition {
     var tz: TIME_DYNAMIC_ZONE_INFORMATION = undefined;
     const result = GetDynamicTimeZoneInformation(&tz);
     if (result == TIME_ZONE_ID_INVALID ) {
@@ -333,7 +363,7 @@ pub fn initTimetypeWindows(allocator: Allocator) !void {
         }
     };
     std.sort.pdq(Transition, transitions_array.items, {}, S.order);
-    transitions = try transitions_array.toOwnedSlice();
+    return try transitions_array.toOwnedSlice();
 }
 
 const TIME_ZONE_ID_INVALID: windows.DWORD = 0xffffffff;
@@ -386,7 +416,7 @@ fn transitionFromTz(comptime prefix: []const u8, tz: TIME_DYNAMIC_ZONE_INFORMATI
     };
 }
 
-// `initTimetype` MUST be called before any of these functions are used!
+// `initTransitions` MUST be called before any of these functions are used!
 
 pub fn utcOffset(instant: i64) i64 {
     std.debug.assert(tz_init);

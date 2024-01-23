@@ -51,6 +51,17 @@ pub fn build(b: *std.Build) !void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    const test_step = b.step("test", "Run tests");
+    const tests = b.addTest(.{
+        .root_source_file = .{ .path = "src/test.zig" },
+        .optimize = optimize,
+        .target = target,
+        .link_libc = true,
+    });
+    const run_tests = b.addRunArtifact(tests);
+    run_tests.step.dependOn(b.getInstallStep());
+    test_step.dependOn(&run_tests.step);
 }
 
 const triples = .{

@@ -145,7 +145,7 @@ comptime {
     std.debug.assert(@sizeOf(Chain) == 256);
 }
 
-const ChainDb = struct {
+pub const ChainDb = struct {
     allocator: Allocator,
     file: std.fs.File,
     show: Show,
@@ -156,7 +156,7 @@ const ChainDb = struct {
 
     const Self = @This();
 
-    fn materialize(self: *Self) !void {
+    pub fn materialize(self: *Self) !void {
         std.debug.assert(!self.materialized);
         try self.file.seekTo(0);
         var r = self.file.reader();
@@ -243,7 +243,7 @@ pub const LinkMeta = extern struct {
 pub const Link = extern struct {
     _padding1: u16 = 0,
     chain_id: u16,
-    tags: u8, // bitmap
+    tags: u8 = 0, // bitmap
     _padding2: u8 = 0,
     _padding3: u16 = 0,
     timestamp: i64,
@@ -268,7 +268,7 @@ comptime {
     std.debug.assert(@sizeOf(Link) == 16);
 }
 
-const LinkDb = struct {
+pub const LinkDb = struct {
     allocator: Allocator,
     file: std.fs.File,
     meta: LinkMeta = undefined,
@@ -279,7 +279,7 @@ const LinkDb = struct {
     const NO_WRITE = std.math.maxInt(usize);
     const Self = @This();
 
-    fn materialize(self: *Self, n_chains: usize) !void {
+    pub fn materialize(self: *Self, n_chains: usize) !void {
         std.debug.assert(!self.materialized);
 
         const stat = try self.file.stat();
@@ -767,7 +767,7 @@ fn parseMinDaysOrExit(str: []const u8) u8 {
     return min_days;
 }
 
-fn parseLocalDateOrExit(str: []const u8, label: []const u8) LocalDate {
+pub fn parseLocalDateOrExit(str: []const u8, label: []const u8) LocalDate {
     const parsed = parseLocalDateOrExitInternal(str, label);
     const now = date.epochNow();
     if (parsed.toEpoch() > now) {
@@ -925,11 +925,11 @@ fn parseChainIndexes(allocator: Allocator, chain_db: *ChainDb, str: []const u8) 
     return cids.toOwnedSlice();
 }
 
-const Files = struct {
+pub const Files = struct {
     chains: std.fs.File,
     links: std.fs.File,
 
-    fn close(self: @This()) void {
+    pub fn close(self: @This()) void {
         self.chains.close();
         self.links.close();
     }
@@ -958,7 +958,7 @@ fn getConfigDirPath() ![]const u8 {
     }
 }
 
-fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
+pub fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
     var sow = std.io.getStdOut().writer();
 
     var habu: struct { dir: std.fs.Dir, path: []const u8} = if (data_dir_path) |ddp| blk: {
@@ -1030,6 +1030,8 @@ const Show = enum {
 
 const Options = struct {
     data_dir: ?[]const u8 = null,
+    transitions_str: ?[]const u8 = null,
+    override_now: ?i64 = null,
     show: Show = .active,
 };
 
@@ -1043,6 +1045,15 @@ fn parseOptionsAndPrepareArgs(allocator: Allocator, args: [][]const u8, options:
             if (i == args_array.items.len - 1) printAndExit("Missing path argument to --data-dir\n", .{});
             _ = args_array.orderedRemove(i);
             options.data_dir = args_array.orderedRemove(i);
+            hit = true;
+        // Hidden option used for integration tests
+        } else if (std.mem.eql(u8, arg, "--transitions")) {
+            _ = args_array.orderedRemove(i);
+            options.transitions_str = args_array.orderedRemove(i);
+            hit = true;
+        } else if (std.mem.eql(u8, arg, "--now")) {
+            _ = args_array.orderedRemove(i);
+            options.override_now = try std.fmt.parseInt(i64, args_array.orderedRemove(i), 10);
             hit = true;
         } else if (std.mem.eql(u8, arg, "--show")) {
             if (i == args_array.items.len - 1) printAndExit("Missing argument to --show, expected one of {s}\n", .{try formatEnumValuesForPrint(Show, allocator)});
@@ -1075,7 +1086,6 @@ pub fn main() !void {
         const end = std.time.Instant.now() catch unreachable;
         std.log.debug("finished in {}", .{std.fmt.fmtDuration(end.since(start))});
     }
-    try date.initTimetype(allocator);
 
     var stdout_writer = std.io.getStdOut().writer();
     var buffered_writer = std.io.bufferedWriter(stdout_writer);
@@ -1085,6 +1095,11 @@ pub fn main() !void {
     var args: [][]const u8 = try std.process.argsAlloc(allocator);
     var options: Options = .{};
     args = try parseOptionsAndPrepareArgs(allocator, args, &options);
+
+    try date.initTransitions(allocator, options.transitions_str);
+    if (options.override_now) |now| {
+        date.overrideNow(now);
+    }
 
     var files = try openOrCreateDbFiles(options.data_dir, "");
     defer files.close();
