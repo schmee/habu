@@ -145,7 +145,7 @@ comptime {
     std.debug.assert(@sizeOf(Chain) == 256);
 }
 
-const ChainDb = struct {
+pub const ChainDb = struct {
     allocator: Allocator,
     file: std.fs.File,
     show: Show,
@@ -156,7 +156,7 @@ const ChainDb = struct {
 
     const Self = @This();
 
-    fn materialize(self: *Self) !void {
+    pub fn materialize(self: *Self) !void {
         std.debug.assert(!self.materialized);
         try self.file.seekTo(0);
         var r = self.file.reader();
@@ -268,7 +268,7 @@ comptime {
     std.debug.assert(@sizeOf(Link) == 16);
 }
 
-const LinkDb = struct {
+pub const LinkDb = struct {
     allocator: Allocator,
     file: std.fs.File,
     meta: LinkMeta = undefined,
@@ -279,7 +279,7 @@ const LinkDb = struct {
     const NO_WRITE = std.math.maxInt(usize);
     const Self = @This();
 
-    fn materialize(self: *Self, n_chains: usize) !void {
+    pub fn materialize(self: *Self, n_chains: usize) !void {
         std.debug.assert(!self.materialized);
 
         const stat = try self.file.stat();
@@ -767,7 +767,7 @@ fn parseMinDaysOrExit(str: []const u8) u8 {
     return min_days;
 }
 
-fn parseLocalDateOrExit(str: []const u8, label: []const u8) LocalDate {
+pub fn parseLocalDateOrExit(str: []const u8, label: []const u8) LocalDate {
     const parsed = parseLocalDateOrExitInternal(str, label);
     const now = date.epochNow();
     if (parsed.toEpoch() > now) {
@@ -925,11 +925,11 @@ fn parseChainIndexes(allocator: Allocator, chain_db: *ChainDb, str: []const u8) 
     return cids.toOwnedSlice();
 }
 
-const Files = struct {
+pub const Files = struct {
     chains: std.fs.File,
     links: std.fs.File,
 
-    fn close(self: @This()) void {
+    pub fn close(self: @This()) void {
         self.chains.close();
         self.links.close();
     }
@@ -958,7 +958,7 @@ fn getConfigDirPath() ![]const u8 {
     }
 }
 
-fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
+pub fn openOrCreateDbFiles(data_dir_path: ?[]const u8, suffix: []const u8) !Files {
     var sow = std.io.getStdOut().writer();
 
     var habu: struct { dir: std.fs.Dir, path: []const u8} = if (data_dir_path) |ddp| blk: {

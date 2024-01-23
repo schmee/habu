@@ -1,6 +1,6 @@
 on:
   push:
-    branches: [master]
+    branches: [master, tests]
 
 concurrency:
   group: ${{ github.ref }}
@@ -18,6 +18,14 @@ jobs:
 
       - name: Check out repository
         uses: actions/checkout@v3
+
+      - name: Zig build test Debug
+        run: |
+          zig build test
+
+      - name: Zig build test Release
+        run: |
+          zig build test -Drelease
 
       - name: Zig build cross
         run: |
