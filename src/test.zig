@@ -13,7 +13,7 @@ const LinkDb = main.LinkDb;
 const Link = main.Link;
 
 var allocator = std.heap.c_allocator;
-const print_output = false;
+const print_output = true;
 
 const TmpDb = struct {
     tmpdir: testing.TmpDir,
@@ -163,6 +163,8 @@ fn runCommand(db_path: []const u8, input: []const u8) !void {
     try argv.append("./zig-out/bin/habu");
     try argv.append("--data-dir");
     try argv.append(db_path);
+    try argv.append("--transitions");
+    try argv.append(europe_stockholm_transitions_json);
     for (try splitArg(input)) |arg| {
         try argv.append(arg);
     }
@@ -173,6 +175,7 @@ fn runCommand(db_path: []const u8, input: []const u8) !void {
     if (print_output) {
         std.debug.print("{s} >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", .{input});
         std.debug.print("\n{s}", .{result.stdout});
+        std.debug.print("\n{s}", .{result.stderr});
         std.debug.print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n\n", .{});
     }
     allocator.free(result.stdout);
@@ -188,3 +191,75 @@ fn splitArg(arg: []const u8) ![]const []const u8 {
     }
     return args.toOwnedSlice();
 }
+
+const europe_stockholm_transitions_json =
+\\ [
+\\   { "ts": 1667091600, "offset": 3600 },
+\\   { "ts": 1679792400, "offset": 7200 },
+\\   { "ts": 1698541200, "offset": 3600 },
+\\   { "ts": 1711846800, "offset": 7200 },
+\\   { "ts": 1729990800, "offset": 3600 },
+\\   { "ts": 1743296400, "offset": 7200 },
+\\   { "ts": 1761440400, "offset": 3600 },
+\\   { "ts": 1774746000, "offset": 7200 },
+\\   { "ts": 1792890000, "offset": 3600 },
+\\   { "ts": 1806195600, "offset": 7200 },
+\\   { "ts": 1824944400, "offset": 3600 },
+\\   { "ts": 1837645200, "offset": 7200 },
+\\   { "ts": 1856394000, "offset": 3600 },
+\\   { "ts": 1869094800, "offset": 7200 },
+\\   { "ts": 1887843600, "offset": 3600 },
+\\   { "ts": 1901149200, "offset": 7200 },
+\\   { "ts": 1919293200, "offset": 3600 },
+\\   { "ts": 1932598800, "offset": 7200 },
+\\   { "ts": 1950742800, "offset": 3600 },
+\\   { "ts": 1964048400, "offset": 7200 },
+\\   { "ts": 1982797200, "offset": 3600 },
+\\   { "ts": 1995498000, "offset": 7200 },
+\\   { "ts": 2014246800, "offset": 3600 },
+\\   { "ts": 2026947600, "offset": 7200 },
+\\   { "ts": 2045696400, "offset": 3600 },
+\\   { "ts": 2058397200, "offset": 7200 },
+\\   { "ts": 2077146000, "offset": 3600 },
+\\   { "ts": 2090451600, "offset": 7200 },
+\\   { "ts": 2108595600, "offset": 3600 },
+\\   { "ts": 2121901200, "offset": 7200 },
+\\   { "ts": 2140045200, "offset": 3600 }
+\\ ]
+;
+
+const utc_transitions_json =
+\\ [
+\\   { "ts": 1667091600, "offset": 0 },
+\\   { "ts": 1679792400, "offset": 0 },
+\\   { "ts": 1698541200, "offset": 0 },
+\\   { "ts": 1711846800, "offset": 0 },
+\\   { "ts": 1729990800, "offset": 0 },
+\\   { "ts": 1743296400, "offset": 0 },
+\\   { "ts": 1761440400, "offset": 0 },
+\\   { "ts": 1774746000, "offset": 0 },
+\\   { "ts": 1792890000, "offset": 0 },
+\\   { "ts": 1806195600, "offset": 0 },
+\\   { "ts": 1824944400, "offset": 0 },
+\\   { "ts": 1837645200, "offset": 0 },
+\\   { "ts": 1856394000, "offset": 0 },
+\\   { "ts": 1869094800, "offset": 0 },
+\\   { "ts": 1887843600, "offset": 0 },
+\\   { "ts": 1901149200, "offset": 0 },
+\\   { "ts": 1919293200, "offset": 0 },
+\\   { "ts": 1932598800, "offset": 0 },
+\\   { "ts": 1950742800, "offset": 0 },
+\\   { "ts": 1964048400, "offset": 0 },
+\\   { "ts": 1982797200, "offset": 0 },
+\\   { "ts": 1995498000, "offset": 0 },
+\\   { "ts": 2014246800, "offset": 0 },
+\\   { "ts": 2026947600, "offset": 0 },
+\\   { "ts": 2045696400, "offset": 0 },
+\\   { "ts": 2058397200, "offset": 0 },
+\\   { "ts": 2077146000, "offset": 0 },
+\\   { "ts": 2090451600, "offset": 0 },
+\\   { "ts": 2108595600, "offset": 0 },
+\\   { "ts": 2121901200, "offset": 0 },
+\\   { "ts": 2140045200, "offset": 0 }
+\\ ]
+;

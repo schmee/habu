@@ -1030,6 +1030,7 @@ const Show = enum {
 
 const Options = struct {
     data_dir: ?[]const u8 = null,
+    transitions_str: ?[]const u8 = null,
     show: Show = .active,
 };
 
@@ -1043,6 +1044,11 @@ fn parseOptionsAndPrepareArgs(allocator: Allocator, args: [][]const u8, options:
             if (i == args_array.items.len - 1) printAndExit("Missing path argument to --data-dir\n", .{});
             _ = args_array.orderedRemove(i);
             options.data_dir = args_array.orderedRemove(i);
+            hit = true;
+        // Hidden option used for integration tests
+        } else if (std.mem.eql(u8, arg, "--transitions")) {
+            _ = args_array.orderedRemove(i);
+            options.transitions_str = args_array.orderedRemove(i);
             hit = true;
         } else if (std.mem.eql(u8, arg, "--show")) {
             if (i == args_array.items.len - 1) printAndExit("Missing argument to --show, expected one of {s}\n", .{try formatEnumValuesForPrint(Show, allocator)});
@@ -1075,7 +1081,6 @@ pub fn main() !void {
         const end = std.time.Instant.now() catch unreachable;
         std.log.debug("finished in {}", .{std.fmt.fmtDuration(end.since(start))});
     }
-    try date.initTimetype(allocator);
 
     var stdout_writer = std.io.getStdOut().writer();
     var buffered_writer = std.io.bufferedWriter(stdout_writer);
@@ -1085,6 +1090,8 @@ pub fn main() !void {
     var args: [][]const u8 = try std.process.argsAlloc(allocator);
     var options: Options = .{};
     args = try parseOptionsAndPrepareArgs(allocator, args, &options);
+
+    try date.initTransitions(allocator, options.transitions_str);
 
     var files = try openOrCreateDbFiles(options.data_dir, "");
     defer files.close();
