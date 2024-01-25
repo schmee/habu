@@ -5,7 +5,6 @@ const testing = std.testing;
 const expectEqual = testing.expectEqual;
 const expectEqualSlices = testing.expectEqualSlices;
 
-
 const Allocator = std.mem.Allocator;
 const LocalDate = date.LocalDate;
 const ChainDb = main.ChainDb;
@@ -151,6 +150,115 @@ test "linking same day twice" {
         try expectEqualSlices(Link, &.{ Link{ .chain_id = 0, .timestamp = 1704063600, .tags = 0}}, link_db.links.items);
     }
 }
+
+test "linking / unlinking" {
+    var db = try TmpDb.init();
+    defer db.deinit();
+
+    var seed: [8]u8 = undefined;
+    std.crypto.random.bytes(&seed);
+    var prng = std.rand.DefaultPrng.init(@bitCast(seed));
+    var random = prng.random();
+
+    var commands = [_][]const u8{
+        "link 1 20240101",
+        "link 2 20240102",
+        "link 1 20240103",
+        "link 2 20240104",
+        "link 1 20240105",
+        "link 2 20240106",
+        "link 1 20240107",
+        "link 2 20240108",
+        "link 1 20240109",
+        "link 2 20240110",
+    };
+
+    try runCommand(db.path, "add foo daily");
+    try runCommand(db.path, "add bar daily");
+    random.shuffle([]const u8, &commands);
+    for (commands) |arg| {
+        try runCommand(db.path, arg);
+    }
+
+    const expected = [_]Link{
+        Link{ .chain_id = 0, .timestamp = 1704063600, .tags = 0},
+        Link{ .chain_id = 1, .timestamp = 1704150000, .tags = 0},
+        Link{ .chain_id = 0, .timestamp = 1704236400, .tags = 0},
+        Link{ .chain_id = 1, .timestamp = 1704322800, .tags = 0},
+        Link{ .chain_id = 0, .timestamp = 1704409200, .tags = 0},
+        Link{ .chain_id = 1, .timestamp = 1704495600, .tags = 0},
+        Link{ .chain_id = 0, .timestamp = 1704582000, .tags = 0},
+        Link{ .chain_id = 1, .timestamp = 1704668400, .tags = 0},
+        Link{ .chain_id = 0, .timestamp = 1704754800, .tags = 0},
+        Link{ .chain_id = 1, .timestamp = 1704841200, .tags = 0},
+    };
+
+    {
+        db.loadFiles();
+        defer db.unloadFiles();
+
+        var link_db = db.linkDb();
+        try link_db.materialize(2);
+
+        const meta = link_db.meta;
+        try expectEqual(@as(u16, 10), meta.len);
+
+        try expectEqualSlices(
+            Link,
+            &expected,
+            link_db.links.items
+        );
+    }
+
+    var links_array = std.ArrayList(Link).fromOwnedSlice(allocator, try allocator.dupe(Link, &expected));
+
+    const S = struct {
+        input: []const u8,
+        timestamp: i64,
+    };
+
+    var unlink_commands = [_]S{
+        .{ .input = "unlink 1 20240101", .timestamp = 1704063600 },
+        .{ .input = "unlink 2 20240102", .timestamp = 1704150000 },
+        .{ .input = "unlink 1 20240103", .timestamp = 1704236400 },
+        .{ .input = "unlink 2 20240104", .timestamp = 1704322800 },
+        .{ .input = "unlink 1 20240105", .timestamp = 1704409200 },
+        .{ .input = "unlink 2 20240106", .timestamp = 1704495600 },
+        .{ .input = "unlink 1 20240107", .timestamp = 1704582000 },
+        .{ .input = "unlink 2 20240108", .timestamp = 1704668400 },
+        .{ .input = "unlink 1 20240109", .timestamp = 1704754800 },
+        .{ .input = "unlink 2 20240110", .timestamp = 1704841200 },
+    };
+
+    random.shuffle(S, &unlink_commands);
+
+    for (unlink_commands, 1..) |command, i| {
+        try runCommand(db.path, command.input);
+
+        db.loadFiles();
+        defer db.unloadFiles();
+
+        for (links_array.items, 0..) |link, j| {
+            if (link.timestamp == command.timestamp) {
+                _ = links_array.orderedRemove(j);
+                break;
+            }
+        }
+
+        var link_db = db.linkDb();
+        try link_db.materialize(2);
+
+        const meta = link_db.meta;
+        try expectEqual(@as(u16, 10 - @as(u16, @intCast(i))), meta.len);
+
+        try expectEqualSlices(
+            Link,
+            links_array.items,
+            link_db.links.items
+        );
+    }
+}
+
 
 test "parse date" {
     try testDateParse(try LocalDate.init(2023, 1, 1), "20230101");
