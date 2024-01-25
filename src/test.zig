@@ -71,7 +71,7 @@ test "basic" {
     };
 
     for (commands) |arg| {
-        try runCommand(db.path, arg);
+        try run(db.path, arg);
     }
 
     db.loadFiles();
@@ -120,7 +120,7 @@ test "linking same day twice" {
     };
 
     for (commands) |arg| {
-        try runCommand(db.path, arg);
+        try run(db.path, arg);
     }
 
     {
@@ -136,7 +136,7 @@ test "linking same day twice" {
         try expectEqualSlices(Link, &.{ Link{ .chain_id = 0, .timestamp = 1704063600, .tags = 0}}, link_db.links.items);
     }
 
-    try runCommand(db.path, "link 1 20240101");
+    try run(db.path, "link 1 20240101");
     {
         db.loadFiles();
         defer db.unloadFiles();
@@ -173,11 +173,11 @@ test "linking / unlinking" {
         "link 2 20240110",
     };
 
-    try runCommand(db.path, "add foo daily");
-    try runCommand(db.path, "add bar daily");
+    try run(db.path, "add foo daily");
+    try run(db.path, "add bar daily");
     random.shuffle([]const u8, &commands);
     for (commands) |arg| {
-        try runCommand(db.path, arg);
+        try run(db.path, arg);
     }
 
     const expected = [_]Link{
@@ -233,7 +233,7 @@ test "linking / unlinking" {
     random.shuffle(S, &unlink_commands);
 
     for (unlink_commands, 1..) |command, i| {
-        try runCommand(db.path, command.input);
+        try run(db.path, command.input);
 
         db.loadFiles();
         defer db.unloadFiles();
@@ -264,12 +264,40 @@ test "parse date" {
     try testDateParse(try LocalDate.init(2023, 1, 1), "20230101");
 }
 
-fn testDateParse(expected: LocalDate, str: []const u8) !void {
-    const parsed = main.parseLocalDateOrExit(str, "");
+test "parse date error" {
+    try testDateParseError("Invalid link date '2023011', does not match any format", "link 1 2023011");
+    try testDateParseError("Invalid link date '-123', does not match any format", "link 1 -123");
+    try testDateParseError("Invalid link date 'asdf', does not match any format", "link 1 asdf");
+    try testDateParseError("Invalid link date '100', does not match any format", "link 1 100");
+    try testDateParseError("Invalid link date '99th', out of range for December which has 31 days", "link 1 99th");
+    try testDateParseError("Invalid link date '20100101', year before 2022 not supported", "link 1 20100101");
+}
+
+fn testDateParse(expected: LocalDate, input: []const u8) !void {
+    const parsed = main.parseLocalDateOrExit(input, "");
     try expectEqual(expected, parsed);
 }
 
-fn runCommand(db_path: []const u8, input: []const u8) !void {
+fn testDateParseError(expected: []const u8, input: []const u8) !void {
+    var db = try TmpDb.init();
+    defer db.deinit();
+
+    try run(db.path, "add foo daily");
+
+    const result = try runCapture(db.path, input);
+    var it = std.mem.split(u8, result.stdout, "\n");
+    const msg = it.next().?;
+
+    try expectEqualSlices(u8, expected, msg);
+}
+
+fn run(db_path: []const u8, input: []const u8) !void {
+    var result = try runCapture(db_path, input);
+    allocator.free(result.stdout);
+    allocator.free(result.stderr);
+}
+
+fn runCapture(db_path: []const u8, input: []const u8) !std.ChildProcess.ExecResult {
     var argv = std.ArrayList([]const u8).init(allocator);
     defer argv.deinit();
 
@@ -291,8 +319,7 @@ fn runCommand(db_path: []const u8, input: []const u8) !void {
         std.debug.print("\n{s}", .{result.stderr});
         std.debug.print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n\n", .{});
     }
-    allocator.free(result.stdout);
-    allocator.free(result.stderr);
+    return result;
 }
 
 fn splitArg(arg: []const u8) ![]const []const u8 {
