@@ -34,12 +34,10 @@ const TmpDb = struct {
     }
 
     fn linkDb(self: *Self) LinkDb {
-        self.loadFiles();
         return main.LinkDb{ .allocator = allocator, .file = self.files.?.links };
     }
 
     fn chainDb(self: *Self) ChainDb {
-        self.loadFiles();
         return main.ChainDb{ .allocator = allocator, .file = self.files.?.chains, .show = .all };
     }
 
@@ -76,6 +74,9 @@ test "basic" {
     for (commands) |arg| {
         try runCommand(db.path, arg);
     }
+
+    db.loadFiles();
+    defer db.unloadFiles();
 
     var chain_db = db.chainDb();
     try chain_db.materialize();
@@ -124,6 +125,7 @@ test "linking same day twice" {
     }
 
     {
+        db.loadFiles();
         defer db.unloadFiles();
 
         var link_db = db.linkDb();
@@ -137,6 +139,9 @@ test "linking same day twice" {
 
     try runCommand(db.path, "link 1 20240101");
     {
+        db.loadFiles();
+        defer db.unloadFiles();
+
         var link_db = db.linkDb();
         try link_db.materialize(1);
 
