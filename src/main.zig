@@ -243,7 +243,7 @@ pub const LinkMeta = extern struct {
 pub const Link = extern struct {
     _padding1: u16 = 0,
     chain_id: u16,
-    tags: u8, // bitmap
+    tags: u8 = 0, // bitmap
     _padding2: u8 = 0,
     _padding3: u16 = 0,
     timestamp: i64,

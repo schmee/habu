@@ -135,7 +135,7 @@ test "linking same day twice" {
         const meta = link_db.meta;
         try expectEqual(@as(u16, 1), meta.len);
 
-        try expectEqualSlices(Link, &.{ Link{ .chain_id = 0, .timestamp = 1704063600, .tags = 0}}, link_db.links.items);
+        try expectEqualSlices(Link, &.{ Link{ .chain_id = 0, .timestamp = 1704063600 }}, link_db.links.items);
     }
 
     try run(db, "link 1 20240101");
@@ -149,7 +149,7 @@ test "linking same day twice" {
         const meta = link_db.meta;
         try expectEqual(@as(u16, 1), meta.len);
 
-        try expectEqualSlices(Link, &.{ Link{ .chain_id = 0, .timestamp = 1704063600, .tags = 0}}, link_db.links.items);
+        try expectEqualSlices(Link, &.{ Link{ .chain_id = 0, .timestamp = 1704063600 }}, link_db.links.items);
     }
 }
 
@@ -183,16 +183,16 @@ test "linking / unlinking" {
     }
 
     const expected = [_]Link{
-        Link{ .chain_id = 0, .timestamp = 1704063600, .tags = 0},
-        Link{ .chain_id = 1, .timestamp = 1704150000, .tags = 0},
-        Link{ .chain_id = 0, .timestamp = 1704236400, .tags = 0},
-        Link{ .chain_id = 1, .timestamp = 1704322800, .tags = 0},
-        Link{ .chain_id = 0, .timestamp = 1704409200, .tags = 0},
-        Link{ .chain_id = 1, .timestamp = 1704495600, .tags = 0},
-        Link{ .chain_id = 0, .timestamp = 1704582000, .tags = 0},
-        Link{ .chain_id = 1, .timestamp = 1704668400, .tags = 0},
-        Link{ .chain_id = 0, .timestamp = 1704754800, .tags = 0},
-        Link{ .chain_id = 1, .timestamp = 1704841200, .tags = 0},
+        Link{ .chain_id = 0, .timestamp = 1704063600 },
+        Link{ .chain_id = 1, .timestamp = 1704150000 },
+        Link{ .chain_id = 0, .timestamp = 1704236400 },
+        Link{ .chain_id = 1, .timestamp = 1704322800 },
+        Link{ .chain_id = 0, .timestamp = 1704409200 },
+        Link{ .chain_id = 1, .timestamp = 1704495600 },
+        Link{ .chain_id = 0, .timestamp = 1704582000 },
+        Link{ .chain_id = 1, .timestamp = 1704668400 },
+        Link{ .chain_id = 0, .timestamp = 1704754800 },
+        Link{ .chain_id = 1, .timestamp = 1704841200 },
     };
 
     {
@@ -293,22 +293,22 @@ test "relative dates" {
     }
 
     const expected = [_]Link{
-        Link{ .chain_id = 0, .timestamp = 1704063600, .tags = 0}, // 2024-01-01
-        Link{ .chain_id = 0, .timestamp = 1704150000, .tags = 0}, // 2024-01-02
-        Link{ .chain_id = 0, .timestamp = 1704236400, .tags = 0}, // 2024-01-03
-        Link{ .chain_id = 0, .timestamp = 1704841200, .tags = 0}, // 2024-01-10
+        Link{ .chain_id = 0, .timestamp = 1704063600 }, // 2024-01-01
+        Link{ .chain_id = 0, .timestamp = 1704150000 }, // 2024-01-02
+        Link{ .chain_id = 0, .timestamp = 1704236400 }, // 2024-01-03
+        Link{ .chain_id = 0, .timestamp = 1704841200 }, // 2024-01-10
 
-        Link{ .chain_id = 0, .timestamp = 1705186800, .tags = 0}, // 2024-01-14
-        Link{ .chain_id = 0, .timestamp = 1705273200, .tags = 0}, // 2024-01-15
-        Link{ .chain_id = 0, .timestamp = 1705359600, .tags = 0}, // 2024-01-16
+        Link{ .chain_id = 0, .timestamp = 1705186800 }, // 2024-01-14
+        Link{ .chain_id = 0, .timestamp = 1705273200 }, // 2024-01-15
+        Link{ .chain_id = 0, .timestamp = 1705359600 }, // 2024-01-16
 
-        Link{ .chain_id = 0, .timestamp = 1705705200, .tags = 0}, // 2024-01-21
-        Link{ .chain_id = 0, .timestamp = 1705791600, .tags = 0}, // 2024-01-22
-        Link{ .chain_id = 0, .timestamp = 1705878000, .tags = 0}, // 2024-01-23
-        Link{ .chain_id = 0, .timestamp = 1705964400, .tags = 0}, // 2024-01-24
-        Link{ .chain_id = 0, .timestamp = 1706050800, .tags = 0}, // 2024-01-25
-        Link{ .chain_id = 0, .timestamp = 1706137200, .tags = 0}, // 2024-01-26
-        Link{ .chain_id = 0, .timestamp = 1706223600, .tags = 0}, // 2024-01-26
+        Link{ .chain_id = 0, .timestamp = 1705705200 }, // 2024-01-21
+        Link{ .chain_id = 0, .timestamp = 1705791600 }, // 2024-01-22
+        Link{ .chain_id = 0, .timestamp = 1705878000 }, // 2024-01-23
+        Link{ .chain_id = 0, .timestamp = 1705964400 }, // 2024-01-24
+        Link{ .chain_id = 0, .timestamp = 1706050800 }, // 2024-01-25
+        Link{ .chain_id = 0, .timestamp = 1706137200 }, // 2024-01-26
+        Link{ .chain_id = 0, .timestamp = 1706223600 }, // 2024-01-26
     };
 
     {
