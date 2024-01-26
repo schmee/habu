@@ -148,6 +148,12 @@ pub const LocalDate = struct {
         return buf;
     }
 
+    pub fn yyyyMMdd(self: Self) [8]u8 {
+        var buf: [8]u8 = undefined;
+        _ = std.fmt.bufPrint(&buf, "{d}{d:0>2}{d:0>2}", .{ self.year, self.month, self.day }) catch unreachable;
+        return buf;
+    }
+
     pub fn compare(self: Self, other: Self) std.math.Order {
         return switch (std.math.order(self.year, other.year)) {
             .lt => .lt,
