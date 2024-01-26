@@ -1031,6 +1031,7 @@ const Show = enum {
 const Options = struct {
     data_dir: ?[]const u8 = null,
     transitions_str: ?[]const u8 = null,
+    override_now: ?i64 = null,
     show: Show = .active,
 };
 
@@ -1049,6 +1050,10 @@ fn parseOptionsAndPrepareArgs(allocator: Allocator, args: [][]const u8, options:
         } else if (std.mem.eql(u8, arg, "--transitions")) {
             _ = args_array.orderedRemove(i);
             options.transitions_str = args_array.orderedRemove(i);
+            hit = true;
+        } else if (std.mem.eql(u8, arg, "--now")) {
+            _ = args_array.orderedRemove(i);
+            options.override_now = try std.fmt.parseInt(i64, args_array.orderedRemove(i), 10);
             hit = true;
         } else if (std.mem.eql(u8, arg, "--show")) {
             if (i == args_array.items.len - 1) printAndExit("Missing argument to --show, expected one of {s}\n", .{try formatEnumValuesForPrint(Show, allocator)});
@@ -1092,6 +1097,9 @@ pub fn main() !void {
     args = try parseOptionsAndPrepareArgs(allocator, args, &options);
 
     try date.initTransitions(allocator, options.transitions_str);
+    if (options.override_now) |now| {
+        date.overrideNow(now);
+    }
 
     var files = try openOrCreateDbFiles(options.data_dir, "");
     defer files.close();

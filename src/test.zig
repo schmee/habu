@@ -12,20 +12,22 @@ const LinkDb = main.LinkDb;
 const Link = main.Link;
 
 var allocator = std.heap.c_allocator;
-const print_output = true;
+const print_output = false;
 
 const TestDb = struct {
     tmpdir: testing.TmpDir,
     path: []const u8,
     files: ?main.Files,
+    override_now: ?i64,
 
     const Self = @This();
 
-    fn init() !Self {
+    fn init(args: struct { override_now: ?i64 = null}) !Self {
         var s = Self{
             .tmpdir = testing.tmpDir(.{}),
             .files = null,
             .path = undefined,
+            .override_now = args.override_now,
         };
         _ = try s.tmpdir.dir.makeOpenPath("db", .{});
         s.path = try s.tmpdir.dir.realpathAlloc(allocator, "db");
@@ -61,7 +63,7 @@ const TestDb = struct {
 };
 
 test "basic" {
-    var db = try TestDb.init();
+    var db = try TestDb.init(.{});
     defer db.deinit();
 
     const commands = [_][]const u8{
@@ -71,7 +73,7 @@ test "basic" {
     };
 
     for (commands) |arg| {
-        try run(db.path, arg);
+        try run(db, arg);
     }
 
     db.loadFiles();
@@ -110,7 +112,7 @@ test "basic" {
 }
 
 test "linking same day twice" {
-    var db = try TestDb.init();
+    var db = try TestDb.init(.{});
     defer db.deinit();
 
     const commands = [_][]const u8{
@@ -120,7 +122,7 @@ test "linking same day twice" {
     };
 
     for (commands) |arg| {
-        try run(db.path, arg);
+        try run(db, arg);
     }
 
     {
@@ -136,7 +138,7 @@ test "linking same day twice" {
         try expectEqualSlices(Link, &.{ Link{ .chain_id = 0, .timestamp = 1704063600, .tags = 0}}, link_db.links.items);
     }
 
-    try run(db.path, "link 1 20240101");
+    try run(db, "link 1 20240101");
     {
         db.loadFiles();
         defer db.unloadFiles();
@@ -152,7 +154,7 @@ test "linking same day twice" {
 }
 
 test "linking / unlinking" {
-    var db = try TestDb.init();
+    var db = try TestDb.init(.{});
     defer db.deinit();
 
     var seed: [8]u8 = undefined;
@@ -173,11 +175,11 @@ test "linking / unlinking" {
         "link 2 20240110",
     };
 
-    try run(db.path, "add foo daily");
-    try run(db.path, "add bar daily");
+    try run(db, "add foo daily");
+    try run(db, "add bar daily");
     random.shuffle([]const u8, &commands);
     for (commands) |arg| {
-        try run(db.path, arg);
+        try run(db, arg);
     }
 
     const expected = [_]Link{
@@ -233,7 +235,7 @@ test "linking / unlinking" {
     random.shuffle(S, &unlink_commands);
 
     for (unlink_commands, 1..) |command, i| {
-        try run(db.path, command.input);
+        try run(db, command.input);
 
         db.loadFiles();
         defer db.unloadFiles();
@@ -260,13 +262,78 @@ test "linking / unlinking" {
 }
 
 
-test "parse date" {
-    try testDateParse(try LocalDate.init(2023, 1, 1), "20230101");
+test "relative dates" {
+    // now = 2024-01-26T00:00:00Z
+    var db = try TestDb.init(.{ .override_now = 1706227200 });
+    defer db.deinit();
+
+    var commands = [_][]const u8{
+        "add foo daily",
+
+        "link 1 10", // 2024-01-16
+        "link 1 11", // 2024-01-15
+        "link 1 12", // 2024-01-14
+
+        "link 1 mon", // 2024-01-22
+        "link 1 tue", // 2024-01-23
+        "link 1 wed", // 2024-01-24
+        "link 1 thu", // 2024-01-25
+        "link 1 fri", // 2024-01-26
+        "link 1 sat", // 2024-01-20
+        "link 1 sun", // 2024-01-21
+
+        "link 1 1st", // 2024-01-01
+        "link 1 2nd", // 2024-01-02
+        "link 1 3rd", // 2024-01-03
+        "link 1 10th", // 2024-01-10
+    };
+
+    for (commands) |arg| {
+        try run(db, arg);
+    }
+
+    const expected = [_]Link{
+        Link{ .chain_id = 0, .timestamp = 1704063600, .tags = 0}, // 2024-01-01
+        Link{ .chain_id = 0, .timestamp = 1704150000, .tags = 0}, // 2024-01-02
+        Link{ .chain_id = 0, .timestamp = 1704236400, .tags = 0}, // 2024-01-03
+        Link{ .chain_id = 0, .timestamp = 1704841200, .tags = 0}, // 2024-01-10
+
+        Link{ .chain_id = 0, .timestamp = 1705186800, .tags = 0}, // 2024-01-14
+        Link{ .chain_id = 0, .timestamp = 1705273200, .tags = 0}, // 2024-01-15
+        Link{ .chain_id = 0, .timestamp = 1705359600, .tags = 0}, // 2024-01-16
+
+        Link{ .chain_id = 0, .timestamp = 1705705200, .tags = 0}, // 2024-01-21
+        Link{ .chain_id = 0, .timestamp = 1705791600, .tags = 0}, // 2024-01-22
+        Link{ .chain_id = 0, .timestamp = 1705878000, .tags = 0}, // 2024-01-23
+        Link{ .chain_id = 0, .timestamp = 1705964400, .tags = 0}, // 2024-01-24
+        Link{ .chain_id = 0, .timestamp = 1706050800, .tags = 0}, // 2024-01-25
+        Link{ .chain_id = 0, .timestamp = 1706137200, .tags = 0}, // 2024-01-26
+        Link{ .chain_id = 0, .timestamp = 1706223600, .tags = 0}, // 2024-01-26
+    };
+
+    {
+        db.loadFiles();
+        defer db.unloadFiles();
+
+        var link_db = db.linkDb();
+        try link_db.materialize(1);
+
+        const meta = link_db.meta;
+        try expectEqual(@as(u16, expected.len), meta.len);
+
+        try expectEqualSlices(
+            Link,
+            &expected,
+            link_db.links.items
+        );
+    }
 }
 
 test "parse date error" {
-    var db = try TestDb.init();
+    var db = try TestDb.init(.{});
     defer db.deinit();
+
+    try run(db, "add foo daily");
 
     try testDateParseError(db, "Invalid link date '2023011', does not match any format", "link 1 2023011");
     try testDateParseError(db, "Invalid link date '-123', does not match any format", "link 1 -123");
@@ -283,30 +350,32 @@ fn testDateParse(expected: LocalDate, input: []const u8) !void {
 }
 
 fn testDateParseError(db: TestDb, expected: []const u8, input: []const u8) !void {
-    try run(db.path, "add foo daily");
-
-    const result = try runCapture(db.path, input);
+    const result = try runCapture(db, input);
     var it = std.mem.split(u8, result.stdout, "\n");
     const msg = it.next().?;
 
     try expectEqualSlices(u8, expected, msg);
 }
 
-fn run(db_path: []const u8, input: []const u8) !void {
-    var result = try runCapture(db_path, input);
+fn run(db: TestDb, input: []const u8) !void {
+    var result = try runCapture(db, input);
     allocator.free(result.stdout);
     allocator.free(result.stderr);
 }
 
-fn runCapture(db_path: []const u8, input: []const u8) !std.ChildProcess.ExecResult {
+fn runCapture(db: TestDb, input: []const u8) !std.ChildProcess.ExecResult {
     var argv = std.ArrayList([]const u8).init(allocator);
     defer argv.deinit();
 
     try argv.append("./zig-out/bin/habu");
     try argv.append("--data-dir");
-    try argv.append(db_path);
+    try argv.append(db.path);
     try argv.append("--transitions");
     try argv.append(europe_stockholm_transitions_json);
+    if (db.override_now) |now| {
+        try argv.append("--now");
+        try argv.append(try std.fmt.allocPrint(allocator, "{d}", .{now}));
+    }
     for (try splitArg(input)) |arg| {
         try argv.append(arg);
     }

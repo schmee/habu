@@ -273,8 +273,17 @@ pub fn daysBetween(a: i64, b: i64) u64 {
     return @divFloor(@as(u64, @intCast(b - a)), secs_per_day) -| 1;
 }
 
+var constant_now: ?i64 = null;
+
+pub fn overrideNow(now: i64) void {
+    constant_now = now;
+}
+
 pub fn epochNow() i64 {
-    return std.time.timestamp();
+    return if (constant_now) |now|
+        now
+    else
+        std.time.timestamp();
 }
 
 pub const Transition = struct {
