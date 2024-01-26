@@ -195,22 +195,7 @@ test "linking / unlinking" {
         Link{ .chain_id = 1, .timestamp = 1704841200 },
     };
 
-    {
-        db.loadFiles();
-        defer db.unloadFiles();
-
-        var link_db = db.linkDb();
-        try link_db.materialize(2);
-
-        const meta = link_db.meta;
-        try expectEqual(@as(u16, 10), meta.len);
-
-        try expectEqualSlices(
-            Link,
-            &expected,
-            link_db.links.items
-        );
-    }
+    try expectLinks(&db, &expected);
 
     var links_array = std.ArrayList(Link).fromOwnedSlice(allocator, try allocator.dupe(Link, &expected));
 
@@ -311,22 +296,7 @@ test "relative dates" {
         Link{ .chain_id = 0, .timestamp = 1706223600 }, // 2024-01-26
     };
 
-    {
-        db.loadFiles();
-        defer db.unloadFiles();
-
-        var link_db = db.linkDb();
-        try link_db.materialize(1);
-
-        const meta = link_db.meta;
-        try expectEqual(@as(u16, expected.len), meta.len);
-
-        try expectEqualSlices(
-            Link,
-            &expected,
-            link_db.links.items
-        );
-    }
+    try expectLinks(&db, &expected);
 }
 
 test "parse date error" {
@@ -342,6 +312,23 @@ test "parse date error" {
     try testDateParseError(db, "Invalid link date '99th', out of range for December which has 31 days", "link 1 99th");
     try testDateParseError(db, "Invalid link date '0th', does not match any format", "link 1 0th");
     try testDateParseError(db, "Invalid link date '20100101', year before 2022 not supported", "link 1 20100101");
+}
+
+fn expectLinks(db: *TestDb, expected: []const Link) !void {
+    db.loadFiles();
+    defer db.unloadFiles();
+
+    var link_db = db.linkDb();
+    try link_db.materialize(1);
+
+    const meta = link_db.meta;
+    try expectEqual(@as(u16, @intCast(expected.len)), meta.len);
+
+    try expectEqualSlices(
+        Link,
+        expected,
+        link_db.links.items
+    );
 }
 
 fn testDateParse(expected: LocalDate, input: []const u8) !void {
