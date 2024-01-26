@@ -14,7 +14,7 @@ const Link = main.Link;
 var allocator = std.heap.c_allocator;
 const print_output = true;
 
-const TmpDb = struct {
+const TestDb = struct {
     tmpdir: testing.TmpDir,
     path: []const u8,
     files: ?main.Files,
@@ -61,7 +61,7 @@ const TmpDb = struct {
 };
 
 test "basic" {
-    var db = try TmpDb.init();
+    var db = try TestDb.init();
     defer db.deinit();
 
     const commands = [_][]const u8{
@@ -110,7 +110,7 @@ test "basic" {
 }
 
 test "linking same day twice" {
-    var db = try TmpDb.init();
+    var db = try TestDb.init();
     defer db.deinit();
 
     const commands = [_][]const u8{
@@ -152,7 +152,7 @@ test "linking same day twice" {
 }
 
 test "linking / unlinking" {
-    var db = try TmpDb.init();
+    var db = try TestDb.init();
     defer db.deinit();
 
     var seed: [8]u8 = undefined;
@@ -265,12 +265,16 @@ test "parse date" {
 }
 
 test "parse date error" {
-    try testDateParseError("Invalid link date '2023011', does not match any format", "link 1 2023011");
-    try testDateParseError("Invalid link date '-123', does not match any format", "link 1 -123");
-    try testDateParseError("Invalid link date 'asdf', does not match any format", "link 1 asdf");
-    try testDateParseError("Invalid link date '100', does not match any format", "link 1 100");
-    try testDateParseError("Invalid link date '99th', out of range for December which has 31 days", "link 1 99th");
-    try testDateParseError("Invalid link date '20100101', year before 2022 not supported", "link 1 20100101");
+    var db = try TestDb.init();
+    defer db.deinit();
+
+    try testDateParseError(db, "Invalid link date '2023011', does not match any format", "link 1 2023011");
+    try testDateParseError(db, "Invalid link date '-123', does not match any format", "link 1 -123");
+    try testDateParseError(db, "Invalid link date 'asdf', does not match any format", "link 1 asdf");
+    try testDateParseError(db, "Invalid link date '100', does not match any format", "link 1 100");
+    try testDateParseError(db, "Invalid link date '99th', out of range for December which has 31 days", "link 1 99th");
+    try testDateParseError(db, "Invalid link date '0th', does not match any format", "link 1 0th");
+    try testDateParseError(db, "Invalid link date '20100101', year before 2022 not supported", "link 1 20100101");
 }
 
 fn testDateParse(expected: LocalDate, input: []const u8) !void {
@@ -278,10 +282,7 @@ fn testDateParse(expected: LocalDate, input: []const u8) !void {
     try expectEqual(expected, parsed);
 }
 
-fn testDateParseError(expected: []const u8, input: []const u8) !void {
-    var db = try TmpDb.init();
-    defer db.deinit();
-
+fn testDateParseError(db: TestDb, expected: []const u8, input: []const u8) !void {
     try run(db.path, "add foo daily");
 
     const result = try runCapture(db.path, input);
