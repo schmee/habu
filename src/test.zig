@@ -1,6 +1,7 @@
 const std = @import("std");
 const date = @import("date.zig");
 const main = @import("main.zig");
+const color = @import("color.zig");
 const testing = std.testing;
 const expectEqual = testing.expectEqual;
 const expectEqualSlices = testing.expectEqualSlices;
@@ -15,7 +16,8 @@ var allocator = std.heap.c_allocator;
 const print_output = false;
 
 test "basic" {
-    var db = try TestDb.init(.{});
+    // now = 2024-01-26T00:00:00Z
+    var db = try TestDb.init(.{ .override_now = 1706227200 });
     defer db.deinit();
 
     try run(db, "add Foo daily");
@@ -35,12 +37,12 @@ test "basic" {
         try expectEqual(chain_db.chains.items.len, 1);
         const chain = chain_db.chains.items[0];
 
-        try testing.expectEqualSlices(u8, "Foo", chain.name[0..chain.name_len]);
-        // try expectEqual(created, chain.);
+        try expectEqualSlices(u8, "Foo", chain.name[0..chain.name_len]);
+        try expectEqual(@as(i64, 1706227200), chain.created);
         try expectEqual(@as(u16, 0), chain.id);
         var k: main.Kind = .daily;
         try expectEqual(k, chain.kind);
-        // try expectEqual(.color, chain.kind);
+        try expectEqual(color.Rgb{ .r = 126, .g = 122, .b = 245 }, chain.color);
         try expectEqual(@as(u8, 0), chain.min_days);
         try expectEqual(@as(i64, 0), chain.min_days);
         try expectEqual(@as(u8, 0), chain.n_tags);
@@ -77,11 +79,10 @@ test "linking same day twice" {
     var db = try TestDb.init(.{});
     defer db.deinit();
 
-    const links = &.{ Link{ .chain_id = 0, .timestamp = 1704063600 }};
-
     try run(db, "add foo daily");
-
     try run(db, "link 1 20240101");
+
+    const links = &.{ Link{ .chain_id = 0, .timestamp = 1704063600 }};
     try expectLinks(&db, links);
     try expectErrorMessage(db, "Link already exists on date 2024-01-01, skipping",  "link 1 20240101");
     try expectLinks(&db, links);
@@ -244,15 +245,14 @@ const TestDb = struct {
     const Self = @This();
 
     fn init(args: struct { override_now: ?i64 = null}) !Self {
-        var s = Self{
-            .tmpdir = testing.tmpDir(.{}),
+        const tmpdir = testing.tmpDir(.{});
+        _ = try tmpdir.dir.makeOpenPath("db", .{});
+        return .{
+            .tmpdir = tmpdir,
             .files = null,
-            .path = undefined,
+            .path = try tmpdir.dir.realpathAlloc(allocator, "db"),
             .override_now = args.override_now,
         };
-        _ = try s.tmpdir.dir.makeOpenPath("db", .{});
-        s.path = try s.tmpdir.dir.realpathAlloc(allocator, "db");
-        return s;
     }
 
     fn linkDb(self: *Self) LinkDb {

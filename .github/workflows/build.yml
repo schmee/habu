@@ -31,13 +31,13 @@ jobs:
         run: |
           zig build test -Drelease
 
-      # - name: Zig build cross
-      #   run: |
-      #     zig env
-      #     zig build cross -Drelease
+      - name: Zig build cross
+        run: |
+          zig env
+          zig build cross -Drelease
 
-      # - name: Upload artifacts
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: bin
-      #     path: zig-out/bin/*
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: bin
+          path: zig-out/bin/*
