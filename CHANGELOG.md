@@ -1,4 +1,8 @@
-### Unreleased
+### 20240127
+
+#### Bugfixes
+
+- Fix memory alignment issue that sometimes happened with empty databases: https://github.com/schmee/habu/issues/5
 
 #### Bugfixes
 
