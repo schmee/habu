@@ -12,7 +12,7 @@ const LinkDb = main.LinkDb;
 const Link = main.Link;
 
 var allocator = std.heap.c_allocator;
-const print_output = true;
+const print_output = false;
 
 const TestDb = struct {
     tmpdir: testing.TmpDir,
@@ -66,15 +66,8 @@ test "basic" {
     var db = try TestDb.init(.{});
     defer db.deinit();
 
-    const commands = [_][]const u8{
-        "",
-        "add Foo daily",
-        "link 1 20240101",
-    };
-
-    for (commands) |arg| {
-        try run(db, arg);
-    }
+    try run(db, "add Foo daily");
+    try run(db, "link 1 20240101");
 
     db.loadFiles();
     defer db.unloadFiles();
@@ -115,30 +108,15 @@ test "linking same day twice" {
     var db = try TestDb.init(.{});
     defer db.deinit();
 
+    const links = &.{ Link{ .chain_id = 0, .timestamp = 1704063600 }};
+
     try run(db, "add foo daily");
-    try run(db, "link 1 20240101");
-    {
-        db.loadFiles();
-        defer db.unloadFiles();
-        var link_db = db.linkDb();
-        try link_db.materialize(1);
-
-        const meta = link_db.meta;
-        try expectEqual(@as(u16, 1), meta.len);
-        try expectEqualSlices(Link, &.{ Link{ .chain_id = 0, .timestamp = 1704063600 }}, link_db.links.items);
-    }
 
     try run(db, "link 1 20240101");
-    {
-        db.loadFiles();
-        defer db.unloadFiles();
-        var link_db = db.linkDb();
-        try link_db.materialize(1);
-
-        const meta = link_db.meta;
-        try expectEqual(@as(u16, 1), meta.len);
-        try expectEqualSlices(Link, &.{ Link{ .chain_id = 0, .timestamp = 1704063600 }}, link_db.links.items);
-    }
+    try expectLinks(&db, links);
+    const result = try runCapture(db, "link 1 20240101");
+    try expectErrorMessage("Link already exists on date 2024-01-01, skipping", result);
+    try expectLinks(&db, links);
 }
 
 test "linking / unlinking stress test" {
@@ -302,10 +280,14 @@ fn testDateParse(expected: LocalDate, input: []const u8) !void {
 
 fn testDateParseError(db: TestDb, expected: []const u8, input: []const u8) !void {
     const result = try runCapture(db, input);
-    var it = std.mem.split(u8, result.stdout, "\n");
-    const msg = it.next().?;
+    try expectErrorMessage(expected, result);
+}
 
-    try expectEqualSlices(u8, expected, msg);
+fn expectErrorMessage(message: []const u8, result: std.ChildProcess.ExecResult) !void {
+    defer allocator.free(result.stdout);
+    defer allocator.free(result.stderr);
+    var it = std.mem.split(u8, result.stdout, "\n");
+    try expectEqualSlices(u8, message, it.next().?);
 }
 
 fn run(db: TestDb, input: []const u8) !void {
