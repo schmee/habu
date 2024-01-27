@@ -12,7 +12,7 @@ const LinkDb = main.LinkDb;
 const Link = main.Link;
 
 var allocator = std.heap.c_allocator;
-const print_output = false;
+const print_output = true;
 
 const TestDb = struct {
     tmpdir: testing.TmpDir,
@@ -69,39 +69,56 @@ test "basic" {
     try run(db, "add Foo daily");
     try run(db, "link 1 20240101");
 
-    db.loadFiles();
-    defer db.unloadFiles();
+    {
+        db.loadFiles();
+        defer db.unloadFiles();
 
-    var chain_db = db.chainDb();
-    try chain_db.materialize();
-    const meta = chain_db.meta;
-    try expectEqual(@as(u16, 1), meta.id_counter);
-    try expectEqual(@as(u16, 1), meta.len);
-    try expectEqual(@as(u32, 0), meta._padding);
+        var chain_db = db.chainDb();
+        try chain_db.materialize();
+        const meta = chain_db.meta;
+        try expectEqual(@as(u16, 1), meta.id_counter);
+        try expectEqual(@as(u16, 1), meta.len);
+        try expectEqual(@as(u32, 0), meta._padding);
 
-    try expectEqual(chain_db.chains.items.len, 1);
-    const chain = chain_db.chains.items[0];
+        try expectEqual(chain_db.chains.items.len, 1);
+        const chain = chain_db.chains.items[0];
 
-    try testing.expectEqualSlices(u8, "Foo", chain.name[0..chain.name_len]);
-    // try expectEqual(created, chain.);
-    try expectEqual(@as(u16, 0), chain.id);
-    var k: main.Kind = .daily;
-    try expectEqual(k, chain.kind);
-    // try expectEqual(.color, chain.kind);
-    try expectEqual(@as(u8, 0), chain.min_days);
-    try expectEqual(@as(i64, 0), chain.min_days);
-    try expectEqual(@as(u8, 0), chain.n_tags);
-    for (chain.tags) |tag| {
-        try expectEqual(@as(main.Tag, @bitCast(@as(u128, 0))), tag);
+        try testing.expectEqualSlices(u8, "Foo", chain.name[0..chain.name_len]);
+        // try expectEqual(created, chain.);
+        try expectEqual(@as(u16, 0), chain.id);
+        var k: main.Kind = .daily;
+        try expectEqual(k, chain.kind);
+        // try expectEqual(.color, chain.kind);
+        try expectEqual(@as(u8, 0), chain.min_days);
+        try expectEqual(@as(i64, 0), chain.min_days);
+        try expectEqual(@as(u8, 0), chain.n_tags);
+        for (chain.tags) |tag| {
+            try expectEqual(@as(main.Tag, @bitCast(@as(u128, 0))), tag);
+        }
+        try expectEqual(@as(i64, 0), chain.stopped);
+
+        var link_db = db.linkDb();
+        try link_db.materialize(chain_db.meta.len);
+
+        try expectEqual(link_db.links.items.len, 1);
+        try expectEqual(@as(i64, 0), link_db.links.items[0].chain_id);
+        try expectEqual(@as(i64, 1704063600), link_db.links.items[0].timestamp);
     }
-    try expectEqual(@as(i64, 0), chain.stopped);
 
-    var link_db = db.linkDb();
-    try link_db.materialize(chain_db.meta.len);
+    try run(db, "delete 1");
+    {
+        db.loadFiles();
+        defer db.unloadFiles();
 
-    try expectEqual(link_db.links.items.len, 1);
-    try expectEqual(@as(i64, 0), link_db.links.items[0].chain_id);
-    try expectEqual(@as(i64, 1704063600), link_db.links.items[0].timestamp);
+        var chain_db = db.chainDb();
+        try chain_db.materialize();
+        const meta = chain_db.meta;
+        try expectEqual(@as(u16, 1), meta.id_counter);
+        try expectEqual(@as(u16, 0), meta.len);
+        try expectEqual(@as(u32, 0), meta._padding);
+        try expectEqual(chain_db.chains.items.len, 0);
+    }
+    try expectErrorMessage(db, "No chain found with index '1'", "link 1 20240101");
 }
 
 test "linking same day twice" {
@@ -114,12 +131,11 @@ test "linking same day twice" {
 
     try run(db, "link 1 20240101");
     try expectLinks(&db, links);
-    const result = try runCapture(db, "link 1 20240101");
-    try expectErrorMessage("Link already exists on date 2024-01-01, skipping", result);
+    try expectErrorMessage(db, "Link already exists on date 2024-01-01, skipping",  "link 1 20240101");
     try expectLinks(&db, links);
 }
 
-test "linking / unlinking stress test" {
+test "link/unlink stress test" {
     var db = try TestDb.init(.{});
     defer db.deinit();
 
@@ -166,28 +182,32 @@ test "linking / unlinking stress test" {
         const input = try std.fmt.bufPrint(&buf, "link {d} {s}", .{day.chain_id + 1, day.date_str});
         try run(db, input);
     }
-
     try expectLinks(&db, &links);
 
     var links_array = std.ArrayList(Link).fromOwnedSlice(allocator, try allocator.dupe(Link, &links));
-
     random.shuffle(S, &year);
-
     for (year) |day| {
         const input = try std.fmt.bufPrint(&buf, "unlink {d} {s}", .{day.chain_id + 1, day.date_str});
         try run(db, input);
-
         for (links_array.items, 0..) |link, j| {
             if (link.timestamp == day.timestamp) {
                 _ = links_array.orderedRemove(j);
                 break;
             }
         }
-
         try expectLinks(&db, links_array.items);
     }
 }
 
+test "link now" {
+    // now = 2024-01-26T00:00:00Z
+    var db = try TestDb.init(.{ .override_now = 1706227200 });
+    defer db.deinit();
+
+    try run(db, "add foo daily");
+    try run(db, "link 1");
+    try expectLinks(&db, &.{Link{ .chain_id = 0, .timestamp = 1706227200 }});
+}
 
 test "relative dates" {
     // now = 2024-01-26T00:00:00Z
@@ -229,12 +249,12 @@ test "relative dates" {
         Link{ .chain_id = 0, .timestamp = 1705273200 }, // 2024-01-15
         Link{ .chain_id = 0, .timestamp = 1705359600 }, // 2024-01-16
 
-        Link{ .chain_id = 0, .timestamp = 1705705200 }, // 2024-01-21
-        Link{ .chain_id = 0, .timestamp = 1705791600 }, // 2024-01-22
-        Link{ .chain_id = 0, .timestamp = 1705878000 }, // 2024-01-23
-        Link{ .chain_id = 0, .timestamp = 1705964400 }, // 2024-01-24
-        Link{ .chain_id = 0, .timestamp = 1706050800 }, // 2024-01-25
-        Link{ .chain_id = 0, .timestamp = 1706137200 }, // 2024-01-26
+        Link{ .chain_id = 0, .timestamp = 1705705200 }, // 2024-01-20
+        Link{ .chain_id = 0, .timestamp = 1705791600 }, // 2024-01-21
+        Link{ .chain_id = 0, .timestamp = 1705878000 }, // 2024-01-22
+        Link{ .chain_id = 0, .timestamp = 1705964400 }, // 2024-01-23
+        Link{ .chain_id = 0, .timestamp = 1706050800 }, // 2024-01-24
+        Link{ .chain_id = 0, .timestamp = 1706137200 }, // 2024-01-25
         Link{ .chain_id = 0, .timestamp = 1706223600 }, // 2024-01-26
     };
 
@@ -247,13 +267,26 @@ test "parse date error" {
 
     try run(db, "add foo daily");
 
-    try testDateParseError(db, "Invalid link date '2023011', does not match any format", "link 1 2023011");
-    try testDateParseError(db, "Invalid link date '-123', does not match any format", "link 1 -123");
-    try testDateParseError(db, "Invalid link date 'asdf', does not match any format", "link 1 asdf");
-    try testDateParseError(db, "Invalid link date '100', does not match any format", "link 1 100");
-    try testDateParseError(db, "Invalid link date '99th', out of range for December which has 31 days", "link 1 99th");
-    try testDateParseError(db, "Invalid link date '0th', does not match any format", "link 1 0th");
-    try testDateParseError(db, "Invalid link date '20100101', year before 2022 not supported", "link 1 20100101");
+    try expectErrorMessage(db, "Invalid link date '2023011', does not match any format", "link 1 2023011");
+    try expectErrorMessage(db, "Invalid link date '-123', does not match any format", "link 1 -123");
+    try expectErrorMessage(db, "Invalid link date 'asdf', does not match any format", "link 1 asdf");
+    try expectErrorMessage(db, "Invalid link date '100', does not match any format", "link 1 100");
+    try expectErrorMessage(db, "Invalid link date '99th', out of range for December which has 31 days", "link 1 99th");
+    try expectErrorMessage(db, "Invalid link date '0th', does not match any format", "link 1 0th");
+    try expectErrorMessage(db, "Invalid link date '20100101', year before 2022 not supported", "link 1 20100101");
+}
+
+test "error messages" {
+    // now = 2024-01-26T00:00:00Z
+    var db = try TestDb.init(.{ .override_now = 1706227200 });
+    defer db.deinit();
+
+    try expectErrorMessage(db, "Expected 'kind' argument", "add foo");
+    try expectErrorMessage(db, "No chain found with index '1'", "link 1");
+    try expectErrorMessage(db, "No chain found with index '1'", "unlink 1");
+
+    try run(db, "add foo daily");
+    try expectErrorMessage(db, "No link found on 2024-01-26", "unlink 1");
 }
 
 fn expectLinks(db: *TestDb, expected: []const Link) !void {
@@ -278,12 +311,8 @@ fn testDateParse(expected: LocalDate, input: []const u8) !void {
     try expectEqual(expected, parsed);
 }
 
-fn testDateParseError(db: TestDb, expected: []const u8, input: []const u8) !void {
+fn expectErrorMessage(db: TestDb, message: []const u8, input: []const u8) !void {
     const result = try runCapture(db, input);
-    try expectErrorMessage(expected, result);
-}
-
-fn expectErrorMessage(message: []const u8, result: std.ChildProcess.ExecResult) !void {
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
     var it = std.mem.split(u8, result.stdout, "\n");
