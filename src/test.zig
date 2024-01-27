@@ -214,30 +214,24 @@ test "relative dates" {
     var db = try TestDb.init(.{ .override_now = 1706227200 });
     defer db.deinit();
 
-    var commands = [_][]const u8{
-        "add foo daily",
+    try run(db, "add foo daily");
 
-        "link 1 10", // 2024-01-16
-        "link 1 11", // 2024-01-15
-        "link 1 12", // 2024-01-14
+    try run(db, "link 1 10"); // 2024-01-16
+    try run(db, "link 1 11"); // 2024-01-15
+    try run(db, "link 1 12"); // 2024-01-14
 
-        "link 1 mon", // 2024-01-22
-        "link 1 tue", // 2024-01-23
-        "link 1 wed", // 2024-01-24
-        "link 1 thu", // 2024-01-25
-        "link 1 fri", // 2024-01-26
-        "link 1 sat", // 2024-01-20
-        "link 1 sun", // 2024-01-21
+    try run(db, "link 1 mon"); // 2024-01-22
+    try run(db, "link 1 tue"); // 2024-01-23
+    try run(db, "link 1 wed"); // 2024-01-24
+    try run(db, "link 1 thu"); // 2024-01-25
+    try run(db, "link 1 fri"); // 2024-01-26
+    try run(db, "link 1 sat"); // 2024-01-20
+    try run(db, "link 1 sun"); // 2024-01-21
 
-        "link 1 1st", // 2024-01-01
-        "link 1 2nd", // 2024-01-02
-        "link 1 3rd", // 2024-01-03
-        "link 1 10th", // 2024-01-10
-    };
-
-    for (commands) |arg| {
-        try run(db, arg);
-    }
+    try run(db, "link 1 1st"); // 2024-01-01
+    try run(db, "link 1 2nd"); // 2024-01-02
+    try run(db, "link 1 3rd"); // 2024-01-03
+    try run(db, "link 1 10th"); // 2024-01-10
 
     const expected = [_]Link{
         Link{ .chain_id = 0, .timestamp = 1704063600 }, // 2024-01-01
