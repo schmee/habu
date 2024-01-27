@@ -300,11 +300,6 @@ fn expectLinks(db: *TestDb, expected: []const Link) !void {
     );
 }
 
-fn testDateParse(expected: LocalDate, input: []const u8) !void {
-    const parsed = main.parseLocalDateOrExit(input, "");
-    try expectEqual(expected, parsed);
-}
-
 fn expectErrorMessage(db: TestDb, message: []const u8, input: []const u8) !void {
     const result = try runCapture(db, input);
     defer allocator.free(result.stdout);
@@ -332,9 +327,13 @@ fn runCapture(db: TestDb, input: []const u8) !std.ChildProcess.ExecResult {
         try argv.append("--now");
         try argv.append(try std.fmt.allocPrint(allocator, "{d}", .{now}));
     }
-    for (try splitArg(input)) |arg| {
-        try argv.append(arg);
+
+    var it = std.mem.split(u8, input, " ");
+    while (it.next()) |part| {
+        if (part.len == 0) continue;
+        try argv.append(part);
     }
+
     const result = try std.ChildProcess.exec(.{
         .allocator = allocator,
         .argv = argv.items,
@@ -346,16 +345,6 @@ fn runCapture(db: TestDb, input: []const u8) !std.ChildProcess.ExecResult {
         std.debug.print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n\n", .{});
     }
     return result;
-}
-
-fn splitArg(arg: []const u8) ![]const []const u8 {
-    var it = std.mem.split(u8, arg, " ");
-    var args = std.ArrayList([]const u8).init(allocator);
-    while (it.next()) |part| {
-        if (part.len == 0) continue;
-        try args.append(part);
-    }
-    return args.toOwnedSlice();
 }
 
 const europe_stockholm_transitions_json =
