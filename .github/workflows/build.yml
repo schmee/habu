@@ -33,6 +33,7 @@ jobs:
 
   upload:
     runs-on: ubuntu-latest
+    needs: build
     steps:
       - name: Set up Zig
         uses: goto-bus-stop/setup-zig@v2.2.0
