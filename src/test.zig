@@ -12,55 +12,7 @@ const LinkDb = main.LinkDb;
 const Link = main.Link;
 
 var allocator = std.heap.c_allocator;
-const print_output = true;
-
-const TestDb = struct {
-    tmpdir: testing.TmpDir,
-    path: []const u8,
-    files: ?main.Files,
-    override_now: ?i64,
-
-    const Self = @This();
-
-    fn init(args: struct { override_now: ?i64 = null}) !Self {
-        var s = Self{
-            .tmpdir = testing.tmpDir(.{}),
-            .files = null,
-            .path = undefined,
-            .override_now = args.override_now,
-        };
-        _ = try s.tmpdir.dir.makeOpenPath("db", .{});
-        s.path = try s.tmpdir.dir.realpathAlloc(allocator, "db");
-        return s;
-    }
-
-    fn linkDb(self: *Self) LinkDb {
-        return main.LinkDb{ .allocator = allocator, .file = self.files.?.links };
-    }
-
-    fn chainDb(self: *Self) ChainDb {
-        return main.ChainDb{ .allocator = allocator, .file = self.files.?.chains, .show = .all };
-    }
-
-    fn loadFiles(self: *Self) void {
-        if (self.files) |_| {
-            return;
-        } else {
-            self.files = main.openOrCreateDbFiles(self.path, "") catch unreachable;
-        }
-    }
-
-    fn unloadFiles(self: *Self) void {
-        if (self.files) |*fs| fs.close();
-        self.files = null;
-    }
-
-    fn deinit(self: *Self) void {
-        if (self.files) |*fs| fs.close();
-        self.tmpdir.cleanup();
-        allocator.free(self.path);
-    }
-};
+const print_output = false;
 
 test "basic" {
     var db = try TestDb.init(.{});
@@ -282,6 +234,54 @@ test "error messages" {
     try run(db, "add foo daily");
     try expectErrorMessage(db, "No link found on 2024-01-26", "unlink 1");
 }
+
+const TestDb = struct {
+    tmpdir: testing.TmpDir,
+    path: []const u8,
+    files: ?main.Files,
+    override_now: ?i64,
+
+    const Self = @This();
+
+    fn init(args: struct { override_now: ?i64 = null}) !Self {
+        var s = Self{
+            .tmpdir = testing.tmpDir(.{}),
+            .files = null,
+            .path = undefined,
+            .override_now = args.override_now,
+        };
+        _ = try s.tmpdir.dir.makeOpenPath("db", .{});
+        s.path = try s.tmpdir.dir.realpathAlloc(allocator, "db");
+        return s;
+    }
+
+    fn linkDb(self: *Self) LinkDb {
+        return main.LinkDb{ .allocator = allocator, .file = self.files.?.links };
+    }
+
+    fn chainDb(self: *Self) ChainDb {
+        return main.ChainDb{ .allocator = allocator, .file = self.files.?.chains, .show = .all };
+    }
+
+    fn loadFiles(self: *Self) void {
+        if (self.files) |_| {
+            return;
+        } else {
+            self.files = main.openOrCreateDbFiles(self.path, "") catch unreachable;
+        }
+    }
+
+    fn unloadFiles(self: *Self) void {
+        if (self.files) |*fs| fs.close();
+        self.files = null;
+    }
+
+    fn deinit(self: *Self) void {
+        if (self.files) |*fs| fs.close();
+        self.tmpdir.cleanup();
+        allocator.free(self.path);
+    }
+};
 
 fn expectLinks(db: *TestDb, expected: []const Link) !void {
     db.loadFiles();
