@@ -32,6 +32,7 @@ jobs:
           zig build test -Drelease
 
   upload:
+    runs-on: ubuntu-latest
     steps:
       - name: Set up Zig
         uses: goto-bus-stop/setup-zig@v2.2.0
