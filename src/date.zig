@@ -179,9 +179,12 @@ pub const LocalDate = struct {
 
     pub fn prev(self: Self) Self {
         var prev_day = (self.day - 1) % (getDaysInMonth(self.year, self.month) + 1);
-        if (prev_day == 0) prev_day += 1;
-        var month = if (prev_day < self.day) (self.month - 1) % 13 else self.month;
-        if (month == 0) month = 12;
+        var month = self.month;
+        if (prev_day == 0) {
+            month = (self.month - 1) % 13;
+            if (month == 0) month = 12;
+            prev_day = getDaysInMonth(self.year, month);
+        }
         const year = if (self.month == 1 and month == 12) self.year - 1 else self.year;
         const the_prev = Self.init(year, month, prev_day) catch unreachable;
         std.debug.assert(the_prev.toEpoch() < self.toEpoch());
@@ -455,4 +458,24 @@ pub fn getUserTimeZoneDb(allocator: Allocator) !std.Tz {
     defer tz_file.close();
 
     return std.Tz.parse(allocator, tz_file.reader());
+}
+
+test "LocalDate prev next" {
+    const S = struct {
+        fn testPrevAndNext(d1: LocalDate, d2: LocalDate) !void {
+            try expectEqual(d1, d2.prev());
+            try expectEqual(d1.next(), d2);
+        }
+    };
+
+    try S.testPrevAndNext(try LocalDate.init(2023,  2, 28), try LocalDate.init(2023,  3, 1));
+
+    // Leap year!
+    try S.testPrevAndNext(try LocalDate.init(2024,  1, 31), try LocalDate.init(2024,  2,  1));
+    try S.testPrevAndNext(try LocalDate.init(2024,  2, 28), try LocalDate.init(2024,  2, 29));
+    try S.testPrevAndNext(try LocalDate.init(2024,  2, 29), try LocalDate.init(2024,  3,  1));
+    try S.testPrevAndNext(try LocalDate.init(2024,  3,  5), try LocalDate.init(2024,  3,  6));
+    try S.testPrevAndNext(try LocalDate.init(2024,  6,  5), try LocalDate.init(2024,  6,  6));
+    try S.testPrevAndNext(try LocalDate.init(2024, 10, 31), try LocalDate.init(2024, 11,  1));
+    try S.testPrevAndNext(try LocalDate.init(2023, 12, 31), try LocalDate.init(2024,  1,  1));
 }

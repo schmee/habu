@@ -54,7 +54,7 @@ pub fn build(b: *std.Build) !void {
 
     const test_step = b.step("test", "Run tests");
     const tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/test.zig" },
+        .root_source_file = .{ .path = "src/main.zig" },
         .optimize = optimize,
         .target = target,
         .link_libc = true,

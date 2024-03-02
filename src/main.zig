@@ -1563,3 +1563,8 @@ pub fn main() !void {
     if (builtin.os.tag == .windows)
         _ = std.os.windows.kernel32.SetConsoleOutputCP(old_code_page);
 }
+
+test {
+    _ = @import("date.zig");
+    _ = @import("test.zig");
+}
