@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const epoch = std.time.epoch;
 const windows = std.os.windows;
+const expectEqual = std.testing.expectEqual;
 
 const Allocator = std.mem.Allocator;
 

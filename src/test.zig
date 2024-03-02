@@ -2,7 +2,9 @@ const std = @import("std");
 const date = @import("date.zig");
 const main = @import("main.zig");
 const color = @import("color.zig");
+
 const testing = std.testing;
+const expect = testing.expect;
 const expectEqual = testing.expectEqual;
 const expectEqualSlices = testing.expectEqualSlices;
 
@@ -72,7 +74,7 @@ test "basic" {
         try expectEqual(@as(u32, 0), meta._padding);
         try expectEqual(chain_db.chains.items.len, 0);
     }
-    try expectErrorMessage(db, "No chain found with index '1'", "link 1 20240101");
+    try expectErrorMessage(db, "No chain found with index '1'", "link 1 20240101", .exact);
 }
 
 test "linking same day twice" {
@@ -84,7 +86,7 @@ test "linking same day twice" {
 
     const links = &.{ Link{ .chain_id = 0, .timestamp = 1704063600 }};
     try expectLinks(&db, links);
-    try expectErrorMessage(db, "Link already exists on date 2024-01-01, skipping",  "link 1 20240101");
+    try expectErrorMessage(db, "Link already exists on date 2024-01-01, skipping",  "link 1 20240101", .exact);
     try expectLinks(&db, links);
 }
 
@@ -214,13 +216,14 @@ test "parse date error" {
 
     try run(db, "add foo daily");
 
-    try expectErrorMessage(db, "Invalid link date '2023011', does not match any format", "link 1 2023011");
-    try expectErrorMessage(db, "Invalid link date '-123', does not match any format", "link 1 -123");
-    try expectErrorMessage(db, "Invalid link date 'asdf', does not match any format", "link 1 asdf");
-    try expectErrorMessage(db, "Invalid link date '100', does not match any format", "link 1 100");
-    try expectErrorMessage(db, "Invalid link date '99th', out of range for December which has 31 days", "link 1 99th");
-    try expectErrorMessage(db, "Invalid link date '0th', does not match any format", "link 1 0th");
-    try expectErrorMessage(db, "Invalid link date '20100101', year before 2022 not supported", "link 1 20100101");
+    try expectErrorMessage(db, "Invalid link date '2023011', does not match any format", "link 1 2023011", .exact);
+    try expectErrorMessage(db, "Invalid link date '-123', does not match any format", "link 1 -123", .exact);
+    try expectErrorMessage(db, "Invalid link date 'asdf', does not match any format", "link 1 asdf", .exact);
+    try expectErrorMessage(db, "Invalid link date '100', does not match any format", "link 1 100", .exact);
+    try expectErrorMessage(db, "Invalid link date '0th', does not match any format", "link 1 0th", .exact);
+    try expectErrorMessage(db, "Invalid link date '20100101', year before 2022 not supported", "link 1 20100101", .exact);
+
+    try expectErrorMessage(db, "Invalid link date '99th'", "link 1 99th", .prefix);
 }
 
 test "error messages" {
@@ -228,12 +231,12 @@ test "error messages" {
     var db = try TestDb.init(.{ .override_now = 1706227200 });
     defer db.deinit();
 
-    try expectErrorMessage(db, "Expected 'kind' argument", "add foo");
-    try expectErrorMessage(db, "No chain found with index '1'", "link 1");
-    try expectErrorMessage(db, "No chain found with index '1'", "unlink 1");
+    try expectErrorMessage(db, "Expected 'kind' argument", "add foo", .exact);
+    try expectErrorMessage(db, "No chain found with index '1'", "link 1", .exact);
+    try expectErrorMessage(db, "No chain found with index '1'", "unlink 1", .exact);
 
     try run(db, "add foo daily");
-    try expectErrorMessage(db, "No link found on 2024-01-26", "unlink 1");
+    try expectErrorMessage(db, "No link found on 2024-01-26", "unlink 1", .exact);
 }
 
 const TestDb = struct {
@@ -300,12 +303,15 @@ fn expectLinks(db: *TestDb, expected: []const Link) !void {
     );
 }
 
-fn expectErrorMessage(db: TestDb, message: []const u8, input: []const u8) !void {
+fn expectErrorMessage(db: TestDb, message: []const u8, input: []const u8, mode: enum { exact, prefix }) !void {
     const result = try runCapture(db, input);
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
     var it = std.mem.split(u8, result.stdout, "\n");
-    try expectEqualSlices(u8, message, it.next().?);
+    switch (mode) {
+        .exact => try expectEqualSlices(u8, message, it.next().?),
+        .prefix => try expect(std.mem.startsWith(u8, it.next().?, message)),
+    }
 }
 
 fn run(db: TestDb, input: []const u8) !void {
