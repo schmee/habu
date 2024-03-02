@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) !void {
     const build_opts = b.addOptions();
     exe.addOptions("build_options", build_opts);
 
-    const version = "20240302";
+    const version = "dev";
     build_opts.addOption([]const u8, "version", version);
 
     const git_commit_hash = b.exec(&.{"git", "rev-parse", "HEAD"});
