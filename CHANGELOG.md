@@ -1,3 +1,9 @@
+### 20240302
+
+#### Bugfixes
+
+- Fix edge case date handling
+
 ### 20240127
 
 #### Bugfixes
